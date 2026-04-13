@@ -258,6 +258,21 @@ tr:hover { background: rgba(255,255,255,0.03); }
     min-width: 48px;
 }
 
+.btn-action-small {
+    background: var(--bg-input); 
+    color: var(--primary); 
+    border: 1px solid var(--primary); 
+    padding: 4px 10px; 
+    border-radius: 4px; 
+    cursor: pointer; 
+    font-size: 0.7rem;
+    transition: all 0.2s;
+}
+.btn-action-small:hover {
+    background: var(--primary);
+    color: white;
+}
+
 #btn-assign {
     background: var(--success);
     color: white;
