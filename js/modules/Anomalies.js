@@ -1,87 +1,157 @@
 // js/modules/Anomalies.js
 
 const Anomalies = {
-    // Auditoria: Cruza Omissões com Passageiros sem viagem
+    /**
+     * AUDITORIA: Localiza passageiros órfãos que indicam que uma omissão (Status 2) 
+     * na verdade foi uma viagem realizada. Utiliza sistema de pesos do settings.js.
+     */
     checkOmissions() {
         if (!AppState.results) return alert("Processe os dados primeiro.");
+
+        const config = APP_CONFIG.anomalies;
+        const engine = new Engine();
         const omissoes = AppState.results.trips.filter(t => t.isOmissao && !t.tratada);
         const unassigned = AppState.results.unassigned || [];
-        const engine = new Engine();
+        
+        const orfaosPorCarro = unassigned.reduce((acc, p) => {
+            const v = String(p.veiculo).trim();
+            acc[v] = (acc[v] || []);
+            acc[v].push(p);
+            return acc;
+        }, {});
+
+        const produtivasPorCarro = AppState.results.trips
+            .filter(t => !t.isOmissao)
+            .reduce((acc, t) => {
+                const v = String(t.veiculo).trim();
+                acc[v] = (acc[v] || []);
+                acc[v].push(t);
+                return acc;
+            }, {});
+
         const suspeitas = [];
 
-        console.log(`Analisando ${omissoes.length} omissões contra ${unassigned.length} passageiros...`);
-
         omissoes.forEach(trip => {
-            const hInicio = trip.partidaPlanejada;
-            const hFim = trip.chegadaPlanejada;
-            if (!hInicio) return;
+            const hIniPlan = engine._timeToMinutes(trip.partidaPlanejada);
+            const hFimPlan = engine._timeToMinutes(trip.chegadaPlanejada);
+            const janela = config.criterios.janelaAuditoriaMinutos;
 
-            const tInicio = engine._timeToMinutes(hInicio);
-            const tFim = engine._timeToMinutes(hFim);
+            for (let carro in orfaosPorCarro) {
+                let pontos = 0;
+                let evidencias = [];
+                const paxDoCarro = orfaosPorCarro[carro];
 
-            // Busca passageiros na janela da omissão (+/- 10 min)
-            const paxNaJanela = unassigned.filter(p => {
-                const pMin = engine._timeToMinutes(engine._extractTime(p.horario));
-                return pMin >= (tInicio - 10) && pMin <= (tFim + 10);
-            });
+                const paxNaJanela = paxDoCarro.filter(p => {
+                    const pMin = engine._timeToMinutes(engine._extractTime(p.horario));
+                    return pMin >= (hIniPlan - janela) && pMin <= (hFimPlan + janela);
+                });
 
-            if (paxNaJanela.length > 0) {
-                const agrupado = paxNaJanela.reduce((acc, p) => {
-                    const id = String(p.veiculo).trim();
-                    acc[id] = (acc[id] || 0) + 1;
-                    return acc;
-                }, {});
+                if (paxNaJanela.length === 0) continue;
+                if (config.criterios.minPassageirosSuspeitos > 0 && 
+                    paxNaJanela.length < config.criterios.minPassageirosSuspeitos) continue;
 
-                for (let carro in agrupado) {
-                    if (agrupado[carro] >= 3) { // Se o carro teve 3+ pax no horário
-                        suspeitas.push({
-                            viagemOmitida: trip,
-                            carroCandidato: carro,
-                            qtdPax: agrupado[carro]
-                        });
-                    }
+                // --- CÁLCULO DE PONTOS ---
+                if (String(trip.veiculo).trim() === carro) {
+                    pontos += config.pesos.matchVeiculo;
+                    evidencias.push("Veículo Match");
                 }
+                const linhaPax = paxNaJanela[0].linha.split(' ')[0];
+                const linhaTrip = trip.linha.split(' ')[0];
+                if (linhaPax === linhaTrip) {
+                    pontos += config.pesos.matchLinha;
+                    evidencias.push("Linha Match");
+                }
+                const prod = produtivasPorCarro[carro] || [];
+                const temAntes = prod.some(t => engine._timeToMinutes(t.chegadaReal) <= hIniPlan);
+                const temDepois = prod.some(t => engine._timeToMinutes(t.partidaReal) >= hFimPlan);
+                if (temAntes && temDepois) {
+                    pontos += config.pesos.gapEntreRegistros;
+                    evidencias.push("Gap (Sanduíche)");
+                }
+                const densidade = paxNaJanela.length / paxDoCarro.length;
+                if (densidade >= 0.6) {
+                    pontos += config.pesos.densidadeAlta;
+                    evidencias.push(`Densidade ${Math.round(densidade*100)}%`);
+                }
+
+                // --- FILTRO DE CORTE ---
+                // Se não atingiu a pontuação mínima do settings, descarta a suspeita
+                if (pontos < (config.criterios.minPontuacaoSuspeita || 0)) continue;
+
+                const isFantasma = !produtivasPorCarro[carro];
+
+                suspeitas.push({
+                    trip, carro, qtdPax: paxNaJanela.length, pontos, evidencias, isFantasma,
+                    nivel: pontos >= config.criterios.thresholdAlto ? 'ALTO' : 
+                           (pontos >= config.criterios.thresholdMedio ? 'MÉDIO' : 'BAIXO')
+                });
             }
         });
 
+        suspeitas.sort((a, b) => b.pontos - a.pontos);
         this._renderAnomaliesResult(suspeitas);
     },
 
-    _renderAnomaliesResult(lista) {
-        if (lista.length === 0) return alert("Nenhuma omissão suspeita encontrada.");
 
+    _renderAnomaliesResult(lista) {
+        if (lista.length === 0) return alert("Nenhuma suspeita relevante encontrada.");
+
+        // REMOVEMOS A DIV DE MAX-HEIGHT PARA ELIMINAR O SCROLL DUPLO
         const html = `
-            <div style="max-height: 450px; overflow-y: auto;">
-                <table style="width: 100%; border-collapse: collapse;">
-                    <thead style="background: var(--bg-input); position: sticky; top: 0; z-index: 10;">
-                        <tr>
-                            <th style="padding: 10px; border: 1px solid var(--border);">Linha Omitida</th>
-                            <th style="padding: 10px; border: 1px solid var(--border);">H. Planejado</th>
-                            <th style="padding: 10px; border: 1px solid var(--border);">Carro Suspeito</th>
-                            <th style="padding: 10px; border: 1px solid var(--border);">Qtd Pax</th>
-                            <th style="padding: 10px; border: 1px solid var(--border);">Ação</th>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                <thead>
+                    <tr style="background: var(--bg-input); position: sticky; top: -21px; z-index: 50; box-shadow: 0 2px 2px rgba(0,0,0,0.5);">
+                        <th style="padding: 12px; border-bottom: 2px solid var(--primary);">Probabilidade</th>
+                        <th style="padding: 12px; border-bottom: 2px solid var(--primary);">Viagem Omitida</th>
+                        <th style="padding: 12px; border-bottom: 2px solid var(--primary); text-align:center;">Carro</th>
+                        <th style="padding: 12px; border-bottom: 2px solid var(--primary); text-align:center;">Pax</th>
+                        <th style="padding: 12px; border-bottom: 2px solid var(--primary);">Evidências</th>
+                        <th style="padding: 12px; border-bottom: 2px solid var(--primary); text-align:center;">Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${lista.map(item => {
+                        const corNivel = item.nivel === 'ALTO' ? 'var(--success)' : (item.nivel === 'MÉDIO' ? 'var(--warning)' : 'var(--text-muted)');
+                        const ghostIcon = item.isFantasma ? '<i data-lucide="ghost" style="width:14px; color:var(--danger); margin-right:4px;"></i>' : '';
+                        
+                        return `
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <td style="padding: 10px; text-align: center;">
+                                <span style="background: ${corNivel}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.65rem; font-weight: bold;">
+                                    ${item.nivel} (${item.pontos})
+                                </span>
+                            </td>
+                            <td style="padding: 10px;">
+                                <strong>${item.trip.linha}</strong><br>
+                                <small style="color: var(--text-muted);">${item.trip.partidaPlanejada}</small>
+                            </td>
+                            <td style="padding: 10px; text-align: center; font-weight: bold;">
+                                ${ghostIcon}${item.carro}
+                            </td>
+                            <td style="padding: 10px; text-align: center; font-weight:bold;">${item.qtdPax}</td>
+                            <td style="padding: 10px;">
+                                <small style="display: block; font-size: 0.7rem; color: var(--text-muted);">
+                                    ${item.evidencias.join(' • ')}
+                                </small>
+                            </td>
+                            <td style="padding: 10px; text-align: center;">
+                                <button onclick="UIController.autoFillAudit('${item.carro}', '${item.trip.id}')" 
+                                        class="btn-action-small" style="font-size:0.65rem; padding: 3px 8px;">
+                                    Verificar
+                                </button>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        ${lista.map(item => `
-                            <tr>
-                                <td style="padding: 10px; border: 1px solid var(--border);">${item.viagemOmitida.linha}</td>
-                                <td style="padding: 10px; border: 1px solid var(--border); text-align:center;">${item.viagemOmitida.partidaPlanejada}</td>
-                                <td style="padding: 10px; border: 1px solid var(--border); text-align:center; color: var(--warning); font-weight:bold;">${item.carroCandidato}</td>
-                                <td style="padding: 10px; border: 1px solid var(--border); text-align:center;">${item.qtdPax}</td>
-                                <td style="padding: 10px; border: 1px solid var(--border); text-align:center;">
-                                    <button onclick="UIController.autoFillAudit('${item.carroCandidato}', '${item.viagemOmitida.id}')" 
-                                            class="btn-action-small">Verificar</button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
+                    `}).join('')}
+                </tbody>
+            </table>
         `;
-        UIController.showModal(`Omissões com Passageiros Detectados (${lista.length})`, html);
+        UIController.showModal(`Auditoria de Omissões (${lista.length} suspeitas)`, html);
+        lucide.createIcons();
     },
 
+    /**
+     * GESTÃO: Abre interface para marcar viagens Status 2 como tratadas.
+     */
     manageOmissions() {
         if (!AppState.results) return alert("Processe os dados primeiro.");
         const todasOmissoes = AppState.results.trips.filter(t => t.isOmissao);
@@ -109,9 +179,9 @@ const Anomalies = {
                     </select>
                 </div>
                 <div style="display: flex; gap: 8px;">
-                    <button onclick="Anomalies.applyOmissionFilters()" class="action-card" style="width: auto; padding: 0 15px; font-size: 0.75rem; background: var(--primary); height: 36px; justify-content: center; color:white; border:none; cursor:pointer;">Filtrar</button>
+                    <button onclick="Anomalies.applyOmissionFilters()" class="action-card" style="width: auto; padding: 0 15px; font-size: 0.75rem; background: var(--primary); height: 36px; justify-content: center; border:none; color:white; font-weight:bold; cursor:pointer;">Filtrar</button>
                     <button onclick="Anomalies.clearOmissionFilters()" class="action-card" style="width: auto; padding: 0 15px; font-size: 0.75rem; background: var(--bg-card); height: 36px; justify-content: center; border: 1px solid var(--border); color:white; cursor:pointer;">Limpar</button>
-                    <button onclick="Anomalies.validateAllFiltered()" class="action-card" style="width: auto; padding: 0 15px; font-size: 0.75rem; background: var(--success); height: 36px; justify-content: center; color:white; border:none; cursor:pointer;">Validar Todos</button>
+                    <button onclick="Anomalies.validateAllFiltered()" class="action-card" style="width: auto; padding: 0 15px; font-size: 0.75rem; background: var(--success); height: 36px; justify-content: center; border: none; color:white; font-weight:bold; cursor:pointer;">Validar Todos</button>
                 </div>
             </div>
             <div id="omissao-list-container" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input);">
@@ -126,8 +196,6 @@ const Anomalies = {
         const linha = document.getElementById('omissao-filter-linha')?.value.toLowerCase() || "";
         const status = document.getElementById('omissao-filter-status')?.value || "todos";
         
-        console.log("Executando Filtro Omissões:", {linha, status});
-
         const rows = document.querySelectorAll('.omissao-row');
         rows.forEach(row => {
             const rowLinha = row.getAttribute('data-linha').toLowerCase();
@@ -155,7 +223,7 @@ const Anomalies = {
         const trip = AppState.results.trips.find(t => t.id === tripId);
         if (trip) {
             trip.tratada = !trip.tratada;
-            this._refreshOmissionView();
+            Anomalies._refreshOmissionView();
         }
     },
 
@@ -167,7 +235,7 @@ const Anomalies = {
             const trip = AppState.results.trips.find(t => t.id === tripId);
             if (trip) trip.tratada = true;
         });
-        this._refreshOmissionView();
+        Anomalies._refreshOmissionView();
     },
 
     _refreshOmissionView() {
@@ -178,12 +246,13 @@ const Anomalies = {
         container.innerHTML = this._renderOmissionList(todasOmissoes);
         
         setTimeout(() => {
-            this.applyOmissionFilters();
+            Anomalies.applyOmissionFilters();
             container.scrollTop = scrollPos;
         }, 0);
     },
 
     _renderOmissionList(lista) {
+        if (lista.length === 0) return '<p style="padding: 20px;">Nenhuma omissão encontrada.</p>';
         return `
             <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
                 <thead style="background: var(--bg-card); position: sticky; top: 0; z-index: 10;">
@@ -216,25 +285,36 @@ const Anomalies = {
         `;
     },
 
+    /**
+     * AUDITORIA: Verifica viagens Status 1/3 editadas manualmente que ficaram sem passageiros.
+     */
     checkEditedTrips() {
         if (!AppState.results) return alert("Processe os dados primeiro.");
         const casos = AppState.results.trips.filter(t => 
             String(t.viagemEditada).toLowerCase() === "sim" && (t.paxEfetivos || []).length === 0
         );
-        if (casos.length === 0) return alert("Nenhuma inconsistência encontrada.");
+        if (casos.length === 0) return alert("Nenhuma inconsistência encontrada em viagens editadas.");
+        
         const html = `
-            <table style="width: 100%; border-collapse: collapse;">
+            <table style="width: 100%; border-collapse: collapse; font-size:0.85rem;">
                 <thead style="background: var(--bg-input);">
                     <tr>
                         <th style="padding: 10px; border: 1px solid var(--border);">Carro</th>
                         <th style="padding: 10px; border: 1px solid var(--border);">Linha</th>
-                        <th style="padding: 10px; border: 1px solid var(--border);">Horário Saída</th>
+                        <th style="padding: 10px; border: 1px solid var(--border); text-align:center;">Horário Saída</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${casos.map(t => `<tr><td>${t.veiculo}</td><td>${t.linha}</td><td>${t.partidaReal}</td></tr>`).join('')}
+                    ${casos.map(t => `
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid var(--border);">${t.veiculo}</td>
+                            <td style="padding: 10px; border: 1px solid var(--border);">${t.linha}</td>
+                            <td style="padding: 10px; border: 1px solid var(--border); text-align:center;">${t.partidaReal}</td>
+                        </tr>
+                    `).join('')}
                 </tbody>
-            </table>`;
+            </table>
+        `;
         UIController.showModal("Viagens Editadas sem Passageiros", html);
     }
 };

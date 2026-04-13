@@ -57,6 +57,22 @@ const APP_CONFIG = {
         statusOmissoes: ["2"],
         atribuirAoProximoNoGap: true,
         limiteGapMinutos: 30 // limite maximo para atribuicao
+    },
+    anomalies: {
+        pesos: {
+            matchVeiculo: 40,        // Carro planejado na omissão = Carro do passageiro
+            matchLinha: 20,          // Linha planejada na omissão = Linha do passageiro
+            gapEntreRegistros: 50,   // Omissão entre duas viagens produtivas do mesmo carro
+            densidadeAlta: 30,       // Mais de 60% dos órfãos do carro estão nesta janela
+            foraTolerancia: 15,      // Passageiros detectados na "beirada" da janela de auditoria
+        },
+        criterios: {
+            minPassageirosSuspeitos: 1,  // 0 ignora filtro, 1+ exige ao menos N pax
+            minPontuacaoSuspeita: 20,    // Pontuação minima para carro ser tratado como suspeito
+            janelaAuditoriaMinutos: 25,  // Raio de busca em torno do planejado
+            thresholdAlto: 80,
+            thresholdMedio: 45
+        }
     }
 
 };
