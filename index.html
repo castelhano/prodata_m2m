@@ -159,8 +159,22 @@
                     </button>
                 </div>
                 
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 5px;">
-                    <span id="count-selected" style="font-size: 0.9rem; color: var(--text-muted);">0 selecionados</span>
+                <!-- Rodapé da Seção de Exceções -->
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 12px 15px; min-height: 45px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.1); margin-top: 10px;">
+                    
+                    <!-- Lado Esquerdo: Alerta -->
+                    <div id="omissao-alert" style="display: none; align-items: center; gap: 8px; color: var(--warning); font-weight: bold; font-size: 0.85rem;">
+                        <i data-lucide="alert-triangle" style="width: 18px; height: 18px;"></i>
+                        <span>Omissão: Atribuir passageiros a tornará PRODUTIVA (Horários Planejados).</span>
+                    </div>
+                    
+                    <!-- Espaçador central invisível que garante a separação se o alerta sumir -->
+                    <div style="flex: 1;"></div>
+                    
+                    <!-- Lado Direito: Contador -->
+                    <div id="count-selected" style="font-size: 0.9rem; color: var(--text-muted); font-weight: 500; white-space: nowrap;">
+                        0 selecionados
+                    </div>
                 </div>
             </div>
         </section>

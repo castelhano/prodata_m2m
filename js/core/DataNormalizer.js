@@ -15,24 +15,24 @@ class DataNormalizer {
         }
         return map;
     }
-
+    
     normalize(rawRow) {
         const clean = {};
         for (let field in this.mapping) {
-            // Trim remove espaços vazios no início e fim que bugam a comparação
             const rawValue = rawRow[this.mapping[field]];
             clean[field] = rawValue ? String(rawValue).trim() : "";
         }
-
-        // Normaliza Empresa usando o dicionário
-        if (clean.empresa) {
-            const empresaNormalizada = this.config.normalizacao.empresa[clean.empresa];
-            if (empresaNormalizada) {
-                clean.empresa = empresaNormalizada;
-            }
+        
+        // --- Tratamento Específico de Data/Hora para GPS (Campos separados) ---
+        // Se houver campo de partidaReal mas não houver data nele, tentamos manter a estrutura
+        // O Engine cuidará de converter para minutos.
+        
+        // Normaliza Empresa
+        if (clean.empresa && this.config.normalizacao.empresa[clean.empresa]) {
+            clean.empresa = this.config.normalizacao.empresa[clean.empresa];
         }
-
-        // Normaliza Linha
+        
+        // Normaliza Linha e Sentido
         if (clean.linha && clean.linha.includes(' - ')) {
             const partes = clean.linha.split(' - ');
             clean.linha_base = partes[0].trim();
@@ -41,7 +41,8 @@ class DataNormalizer {
             clean.linha_base = clean.linha;
             clean.sentido = "UNICO";
         }
-
+        
         return clean;
     }
+
 }
