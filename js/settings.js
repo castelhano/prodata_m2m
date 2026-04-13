@@ -27,7 +27,6 @@ const APP_CONFIG = {
             veiculo: "I",
             tipo: "K",
             tarifa: "L",
-            empresa: "G"
         },
         normalizacao: {
             empresa: {
@@ -53,6 +52,7 @@ const APP_CONFIG = {
         },
         // se passageiro esta entre duas viagens deve ser atribuido a proxima
         statusViagensValidas: ["1", "3"],
+        statusOmissoes: ["2"],
         atribuirAoProximoNoGap: true,
         limiteGapMinutos: 30 // limite maximo para atribuicao
     }

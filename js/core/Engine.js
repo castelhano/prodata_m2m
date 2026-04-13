@@ -6,17 +6,22 @@ class Engine {
 
     reconcile() {
 
+        // 1. Definição de quais status vamos processar (Válidas + Omissões)
+        const statusParaProcessar = [...APP_CONFIG.engine.statusViagensValidas, ...APP_CONFIG.engine.statusOmissoes];
+
+
         // 1. Filtragem por status (conforme pedido: apenas 1 e 3)
         // Usamos o filter e já criamos um novo array para evitar problemas de referência
         this.trips = this.trips.filter(trip => {
-            const statusValido = APP_CONFIG.engine.statusViagensValidas || ["1", "3"];
-            return statusValido.includes(String(trip.statusViagem));
+            return statusParaProcessar.includes(String(trip.statusViagem));
         });
 
-        // 2. Inicialização OBRIGATÓRIA
+        // 2. Inicialização
         this.trips.forEach((trip, idx) => {
             trip.id = `trip_${idx}`;
-            trip.paxEfetivos = []; // Garante que NUNCA seja undefined
+            trip.paxEfetivos = [];
+            // Marca se é uma omissão para facilitar filtros na UI
+            trip.isOmissao = APP_CONFIG.engine.statusOmissoes.includes(String(trip.statusViagem));
         });
 
         // 2. Organizar viagens por veículo e ORDENAR por horário para a lógica de GAP

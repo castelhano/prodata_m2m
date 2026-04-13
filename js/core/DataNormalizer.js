@@ -33,11 +33,13 @@ class DataNormalizer {
         }
 
         // Normaliza Linha
-        if (clean.linha && this.config.normalizacao.linha) {
-            const linhaNormalizada = this.config.normalizacao.linha[clean.linha];
-            if (linhaNormalizada) {
-                clean.linha = linhaNormalizada;
-            }
+        if (clean.linha && clean.linha.includes(' - ')) {
+            const partes = clean.linha.split(' - ');
+            clean.linha_base = partes[0].trim();
+            clean.sentido = partes[1].trim().toUpperCase();
+        } else {
+            clean.linha_base = clean.linha;
+            clean.sentido = "UNICO";
         }
 
         return clean;

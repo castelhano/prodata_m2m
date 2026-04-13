@@ -16,7 +16,12 @@
     <header>
         <div class="container header-content">
             <div class="logo"><i data-lucide="bus"></i> TransSync <span>Pro</span></div>
-            <div id="status-badge" style="color: var(--text-muted); font-size: 0.8rem;">Aguardando arquivos...</div>
+            <div id="status-container" class="flex items-center gap-4">
+                <div id="status-badge" style="color: var(--text-muted); font-size: 0.8rem;">Aguardando arquivos...</div>
+                <button id="btn-processar-geral" class="hidden" style="background: var(--primary); color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    Processar
+                </button>
+            </div>
         </div>
     </header>
     
@@ -35,6 +40,12 @@
                 <i data-lucide="file-spreadsheet"></i>
                 <strong>Bilhetagem (XLSX)</strong>
                 <p style="color: var(--text-muted); font-size: 0.8rem;">Clique para selecionar</p>
+            </div>
+            <div class="drop-zone" id="drop-json" onclick="document.getElementById('input-import-json').click()">
+                <i data-lucide="folder-sync"></i>
+                <strong>Importar Trabalho</strong>
+                <p style="color: var(--text-muted); font-size: 0.8rem;">Carregar .json salvo</p>
+                <input type="file" id="input-import-json" class="hidden" accept=".json" onchange="Storage.importJSON(this.files[0])">
             </div>
         </section>
         
@@ -93,7 +104,7 @@
                 <table>
                     <thead>
                         <tr>
-                            <th><input type="checkbox"></th>
+                            <th class="p-4"><input type="checkbox" id="select-all-pax"></th>
                             <th>Horário</th>
                             <th>Empresa</th>
                             <th>Veículo</th>
@@ -105,11 +116,41 @@
                 </table>
             </div>
             
-            <div class="filter-bar" style="justify-content: space-between; background: var(--bg-input);">
-                <span id="count-selected" style="font-size: 0.8rem; color: var(--text-muted);">0 selecionados</span>
-                <div style="display: flex; gap: 10px;">
-                    <select id="select-target-trip" class="filter-group" style="background: var(--bg-card);"></select>
-                    <button id="btn-assign" style="background: var(--success); border: none; color: white; padding: 8px 15px; border-radius: 6px; cursor: pointer;">Atribuir</button>
+            <div class="filter-bar" style="background: var(--bg-input); border-top: 1px solid var(--border); padding: 15px; flex-direction: column; gap: 10px;">
+                
+                <div style="display: flex; gap: 15px; align-items: flex-end; width: 100%;">
+                    
+                    <!-- Input Veículo -->
+                    <div class="filter-group">
+                        <label>Veículo</label>
+                        <input type="text" id="target-filter-veiculo" placeholder="Ex: 1074" style="width: 100px;">
+                    </div>
+                    
+                    <!-- Input Linha -->
+                    <div class="filter-group">
+                        <label>Linha</label>
+                        <input type="text" id="target-filter-linha" placeholder="Ex: A14" style="width: 100px;">
+                    </div>
+                    
+                    <!-- Botão Buscar -->
+                    <button id="btn-buscar-viagens" class="action-card" style="width: auto; padding: 9px 20px; font-size: 0.8rem; background: var(--bg-card); margin-bottom: 1px;">
+                        <i data-lucide="search" style="width: 14px; height: 14px;"></i> Filtrar
+                    </button>
+                    
+                    <!-- Combo de Viagens -->
+                    <div class="filter-group" style="flex-grow: 1;">
+                        <label>Viagem de Destino</label>
+                        <select id="select-target-trip"><option value="">Use os filtros ao lado para buscar...</option></select>
+                    </div>
+                    
+                    <!-- Botão Atribuir -->
+                    <button id="btn-assign" style="background: var(--success); color: white; padding: 10px 25px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; height: 38px; margin-bottom: 1px;">
+                        ATRIBUIR
+                    </button>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 5px;">
+                    <span id="count-selected" style="font-size: 0.9rem; color: var(--text-muted);">0 selecionados</span>
                 </div>
             </div>
         </section>
@@ -118,13 +159,17 @@
         <section id="actions-section" class="hidden">
             <h2 style="margin-bottom: 1rem;">Operações</h2>
             <div class="actions-grid">
-                <button class="action-card" onclick="alert('Analisando...')">
+                <button class="action-card" onclick="Anomalies.checkOmissions()">
                     <div class="icon-box"><i data-lucide="alert-circle"></i></div>
-                    <div><strong>Omissões com PAX</strong><p style="font-size: 0.7rem; color: var(--text-muted);">Verifica erros de GPS</p></div>
+                    <div><strong>Omissões com PAX</strong></div>
                 </button>
-                <button class="action-card" onclick="alert('Analisando...')">
+                <button class="action-card" onclick="Anomalies.checkEditedTrips()">
                     <div class="icon-box" style="color: var(--warning);"><i data-lucide="edit"></i></div>
-                    <div><strong>Viagens Editadas</strong><p style="font-size: 0.7rem; color: var(--text-muted);">Sem passageiros</p></div>
+                    <div><strong>Editadas sem PAX</strong></div>
+                </button>
+                <button class="action-card" onclick="Storage.exportJSON()">
+                    <div class="icon-box" style="color: var(--success);"><i data-lucide="download-cloud"></i></div>
+                    <div><strong>Exportar Trabalho</strong><p style="font-size: 0.7rem; color: var(--text-muted);margin-top: 8px;">Salva JSON com tudo tratado</p></div>
                 </button>
                 <button class="action-card" onclick="alert('Gerando...')">
                     <div class="icon-box" style="color: var(--success);"><i data-lucide="download"></i></div>
@@ -143,8 +188,10 @@
     <script src="js/core/DataNormalizer.js"></script>
     <script src="js/core/Parser.js"></script>
     <script src="js/core/Engine.js"></script>
+    <script src="js/core/Storage.js"></script>
     <script src="js/ui/UIController.js"></script>
     <script src="js/main.js"></script>
+    <script src="js/modules/Anomalies.js"></script>
     <script>lucide.createIcons();</script>
 
     <script>

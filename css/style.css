@@ -43,20 +43,48 @@ select option {
     color: var(--text-main);
 }
 
-/* Ajuste adicional para o botão de atribuir não sumir */
-#btn-assign {
-    background: var(--success);
-    color: white;
-    font-weight: bold;
-    border: none;
-    padding: 8px 20px;
+.filter-bar input, 
+.filter-bar select {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 8px 12px;
     border-radius: 6px;
-    cursor: pointer;
-    transition: opacity 0.2s;
+    outline: none;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+}
+
+.filter-bar input:focus, 
+.filter-bar select:focus {
+    border-color: var(--primary);
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.filter-group label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Ajuste específico para o botão de atribuir para alinhar com os inputs */
+#btn-assign {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: filter 0.2s;
 }
 
 #btn-assign:hover {
-    opacity: 0.9;
+    filter: brightness(1.1);
 }
 
 .container {
@@ -92,7 +120,7 @@ section { margin-bottom: 2rem; display: block; }
 /* Cards de Importação */
 .import-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 20px;
 }
 
@@ -161,6 +189,19 @@ table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 thead { background: var(--bg-input); position: sticky; top: 0; }
 th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
 tr:hover { background: rgba(255,255,255,0.02); }
+
+#select-target-trip {
+    font-family: 'Courier New', Courier, monospace; /* Crucial para alinhamento */
+    font-size: 0.85rem;
+    width: 100%;
+    background-color: var(--bg-input);
+    color: var(--text-main);
+    padding: 10px;
+}
+
+#select-target-trip option {
+    padding: 5px;
+}
 
 /* Operações (Botões de Ação) */
 .actions-grid {

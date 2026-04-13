@@ -1,5 +1,6 @@
 class Parser {
     static readCSV(file) {
+        
         return new Promise((resolve, reject) => {
             Papa.parse(file, {
                 header: false,
@@ -16,6 +17,7 @@ class Parser {
     }
 
     static readXLSX(file) {
+        
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
