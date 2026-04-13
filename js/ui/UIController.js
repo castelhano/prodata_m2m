@@ -205,5 +205,61 @@ const UIController = {
         
         this.updateDashboard(AppState.results);
         alert(`${movidos.length} passageiros atribuídos!`);
-    }
+    },
+
+    showModal(titulo, htmlContent) {
+        const oldModal = document.querySelector('.modal-overlay');
+        if (oldModal) oldModal.remove();
+
+        const modalHtml = `
+            <div class="modal-overlay" id="modal-container">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 style="font-size: 1.1rem; color: var(--primary); margin:0;">${titulo}</h2>
+                        <button class="btn-close-modal" onclick="document.getElementById('modal-container').remove()">✕</button>
+                    </div>
+                    <div class="modal-body" style="position:relative;">${htmlContent}</div>
+                    <div class="modal-footer">
+                        <button class="action-card" style="width:auto; padding: 8px 20px; background: var(--bg-card);" onclick="document.getElementById('modal-container').remove()">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    },
+
+
+    autoFillAudit(veiculo, tripId) {
+        // 1. Fecha o modal imediatamente
+        const modal = document.getElementById('modal-container');
+        if (modal) modal.remove();
+
+        // 2. Preenche os filtros (Topo e Rodapé)
+        document.getElementById('filter-veiculo').value = veiculo;
+        document.getElementById('target-filter-veiculo').value = veiculo;
+        document.getElementById('target-filter-linha').value = ""; // Limpa linha para não conflitar
+
+        // 3. Aplica os filtros na tabela de passageiros
+        this.applyLocalFilters();
+
+        // 4. Carrega o combo de viagens
+        this.updateTripSelector();
+
+        // 5. Seleciona a viagem alvo após um micro-delay para o DOM processar as opções
+        setTimeout(() => {
+            const select = document.getElementById('select-target-trip');
+            
+            // Verifica se a viagem realmente está no combo antes de selecionar
+            if (Array.from(select.options).some(opt => opt.value === tripId)) {
+                select.value = tripId;
+            } else {
+                console.warn("Viagem alvo não encontrada no combo filtrado.");
+            }
+            
+            // Dá um scroll suave até a seção de exceções para o usuário ver o resultado
+            document.getElementById('exception-section').scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+    },
+
+
 };
