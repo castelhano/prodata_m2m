@@ -11,7 +11,7 @@ const Anomalies = {
         console.log("--- INICIANDO AUDITORIA DE OMISSÕES ---");
         
         // 1. Filtra apenas as omissões (Status 2)
-        const omissoes = AppState.results.trips.filter(t => t.isOmissao);
+        const omissoes = AppState.results.trips.filter(t => t.isOmissao && !t.tratada);
         console.log(`Viagens com Status Omissão (2) encontradas: ${omissoes.length}`);
 
         const unassigned = AppState.results.unassigned || [];
@@ -103,9 +103,6 @@ const Anomalies = {
         }
     },
 
-    /**
-     * Exibe os resultados da auditoria na tela via modal
-     */
     _renderAnomaliesResult(lista) {
         if (lista.length === 0) {
             alert("Nenhuma omissão suspeita encontrada.");
@@ -147,4 +144,70 @@ const Anomalies = {
 
         UIController.showModal(`Auditoria de Omissões (${lista.length} casos)`, tableHtml);
     },
+
+    manageOmissions() {
+        if (!AppState.results) return alert("Processe os dados primeiro.");
+
+        const todasOmissoes = AppState.results.trips.filter(t => t.isOmissao);
+
+        let html = `
+            <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+                <input type="text" id="omissao-search-linha" placeholder="Filtrar Linha" oninput="Anomalies.filterOmissionList()" style="padding: 5px; background: var(--bg-input); color: white; border: 1px solid var(--border);">
+            </div>
+            <div id="omissao-list-container" style="max-height: 400px; overflow-y: auto;">
+                ${this._renderOmissionList(todasOmissoes)}
+            </div>
+        `;
+
+        UIController.showModal("Gerenciar Omissões (GPS Status 2)", html);
+    },
+
+    _renderOmissionList(lista) {
+        return `
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                <thead style="background: var(--bg-input); position: sticky; top: 0;">
+                    <tr>
+                        <th style="padding: 8px; border: 1px solid var(--border);">Empresa</th>
+                        <th style="padding: 8px; border: 1px solid var(--border);">Linha</th>
+                        <th style="padding: 8px; border: 1px solid var(--border);">Hora Planejada</th>
+                        <th style="padding: 8px; border: 1px solid var(--border);">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${lista.map(t => `
+                        <tr class="omissao-row" data-linha="${t.linha}">
+                            <td style="padding: 8px; border: 1px solid var(--border);">${t.empresa}</td>
+                            <td style="padding: 8px; border: 1px solid var(--border);">${t.linha}</td>
+                            <td style="padding: 8px; border: 1px solid var(--border); text-align: center;">${t.partidaPlanejada}</td>
+                            <td style="padding: 8px; border: 1px solid var(--border); text-align: center;">
+                                <button onclick="Anomalies.toggleOmissionStatus('${t.id}')" 
+                                        style="background: ${t.tratada ? 'var(--success)' : 'var(--bg-input)'}; border: 1px solid var(--border); color: white; cursor: pointer; padding: 2px 10px; border-radius: 4px;">
+                                    ${t.tratada ? 'Tratada ✓' : 'Pendente'}
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    },
+
+    toggleOmissionStatus(tripId) {
+        const trip = AppState.results.trips.find(t => t.id === tripId);
+        if (trip) {
+            trip.tratada = !trip.tratada;
+            // Re-renderiza a lista dentro do modal
+            const todasOmissoes = AppState.results.trips.filter(t => t.isOmissao);
+            document.getElementById('omissao-list-container').innerHTML = this._renderOmissionList(todasOmissoes);
+        }
+    },
+
+    filterOmissionList() {
+        const termo = document.getElementById('omissao-search-linha').value.toLowerCase();
+        document.querySelectorAll('.omissao-row').forEach(row => {
+            const linha = row.getAttribute('data-linha').toLowerCase();
+            row.style.display = linha.includes(termo) ? 'table-row' : 'none';
+        });
+    }
+
 };

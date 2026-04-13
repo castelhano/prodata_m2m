@@ -31,14 +31,27 @@ const UIController = {
         
         const conciliados = results.trips.reduce((acc, t) => acc + (t.paxEfetivos || []).length, 0);
         const pendentes = (results.unassigned || []).length;
+        const omissoesTotais = results.trips.filter(t => t.isOmissao).length;
         
         document.getElementById('stat-total-pax').innerText = (conciliados + pendentes).toLocaleString();
         document.getElementById('stat-assigned-pax').innerText = conciliados.toLocaleString();
         document.getElementById('stat-unassigned-pax').innerText = pendentes.toLocaleString();
         document.getElementById('stat-total-trips').innerText = results.trips.length;
+        document.getElementById('stat-total-omissoes').innerText = omissoesTotais;
         
+        this.populateCompanyFilter();
         this.renderExceptions(results.unassigned);
+        this.updateTripSelector();
+
     },
+
+    populateCompanyFilter() {
+        const select = document.getElementById('filter-empresa');
+        const empresasNoProcesso = [...new Set(AppState.results.trips.map(t => t.empresa))];
+        select.innerHTML = '<option value="">Empresa (Todas)</option>' + 
+        empresasNoProcesso.map(e => `<option value="${e}">${e}</option>`).join('');
+    },
+
 
     renderExceptions(list) {
         const tbody = document.getElementById('table-exceptions-body');
@@ -139,6 +152,7 @@ const UIController = {
     applyLocalFilters() {
         const veiculo = document.getElementById('filter-veiculo').value.trim();
         const linha = document.getElementById('filter-linha').value.toLowerCase().trim();
+        const empresa = document.getElementById('filter-empresa').value;
         const horaInicio = document.getElementById('filter-inicio').value;
         const horaFim = document.getElementById('filter-fim').value;
         
@@ -147,6 +161,7 @@ const UIController = {
         const filtrados = AppState.results.unassigned.filter(p => {
             const matchVeiculo = !veiculo || p.veiculo.includes(veiculo);
             const matchLinha = !linha || p.linha.toLowerCase().includes(linha);
+            const matchEmpresa = !empresa || p.empresa === empresa;
             let matchHorario = true;
             if (horaInicio || horaFim) {
                 const engineTemp = new Engine(); 
@@ -154,12 +169,12 @@ const UIController = {
                 if (horaInicio && pMinutos < engineTemp._timeToMinutes(horaInicio)) matchHorario = false;
                 if (horaFim && pMinutos > engineTemp._timeToMinutes(horaFim)) matchHorario = false;
             }
-            return matchVeiculo && matchLinha && matchHorario;
+            return matchVeiculo && matchLinha && matchEmpresa && matchHorario;
         });
         
         this.renderExceptions(filtrados);
-        document.getElementById('count-selected').innerText = `Encontrados ${filtrados.length} no filtro`;
         this.resetSelectAll(); // limpa itens marcados se existirem
+        document.getElementById('count-selected').innerText = `Encontrados ${filtrados.length} no filtro`;
         this.updateSmartTripSuggestions(filtrados);
     },
 
@@ -185,7 +200,7 @@ const UIController = {
     },
 
     clearFilters() {
-        ['filter-veiculo', 'filter-linha', 'filter-inicio', 'filter-fim'].forEach(id => document.getElementById(id).value = "");
+        ['filter-empresa', 'filter-veiculo', 'filter-linha', 'filter-inicio', 'filter-fim'].forEach(id => document.getElementById(id).value = "");
         if (AppState.results) this.renderExceptions(AppState.results.unassigned);
         this.resetSelectAll(); // limpa itens marcados se existirem
         this._updateSelectedCount();

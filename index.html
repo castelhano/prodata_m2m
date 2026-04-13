@@ -75,11 +75,21 @@
                 <p>Viagens</p>
                 <h3 id="stat-total-trips">0</h3>
             </div>
+            <div class="stat-card warning" style="border-left-color: var(--primary);">
+                <p>Omissões (GPS)</p>
+                <h3 id="stat-total-omissoes">0</h3>
+            </div>
         </section>
 
         <!-- 3. Exceções -->
         <section id="exception-section" class="exception-box hidden">
             <div class="filter-bar">
+                <div class="filter-group">
+                    <label>Empresa</label>
+                    <select id="filter-empresa">
+                        <option value="">Empresa (Todas)</option>
+                    </select>
+                </div>
                 <div class="filter-group">
                     <label>Veículo</label>
                     <input type="text" id="filter-veiculo" placeholder="Ex: 1077">
@@ -169,7 +179,11 @@
                 </button>
                 <button class="action-card" onclick="Storage.exportJSON()">
                     <div class="icon-box" style="color: var(--success);"><i data-lucide="download-cloud"></i></div>
-                    <div><strong>Exportar Trabalho</strong><p style="font-size: 0.7rem; color: var(--text-muted);margin-top: 8px;">Salva JSON com tudo tratado</p></div>
+                    <div><strong>Exportar Trabalho</strong><p style="font-size: 0.7rem; color: var(--text-muted);">Salva JSON com tudo tratado</p></div>
+                </button>
+                <button class="action-card" onclick="Anomalies.manageOmissions()">
+                    <div class="icon-box" style="color: var(--text-main);"><i data-lucide="list-checks"></i></div>
+                    <div><strong>Gerenciar Omissões</strong><p style="font-size: 0.7rem; color: var(--text-muted);">Ver e marcar omissões tratadas</p></div>
                 </button>
                 <button class="action-card" onclick="alert('Gerando...')">
                     <div class="icon-box" style="color: var(--success);"><i data-lucide="download"></i></div>
