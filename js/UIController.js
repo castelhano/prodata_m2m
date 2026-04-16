@@ -1,0 +1,496 @@
+// ============================================================
+// UIController.js — Camada de apresentação
+//
+// Responsabilidade: ler o Session e atualizar o DOM.
+// Não contém lógica de negócio — não conhece o Engine.
+//
+// Todos os métodos são puros do ponto de vista de dados:
+// recebem o que precisam renderizar como parâmetro.
+// Leem AppState.session apenas quando necessário para filtros
+// e buscas que operam sobre o estado atual.
+// ============================================================
+
+const UIController = {
+
+    // ==========================================================
+    // LOADER
+    // ==========================================================
+
+    showLoader(texto = "Processando...") {
+        const loader = document.getElementById("loader");
+        loader.querySelector("p").innerText = texto;
+        loader.classList.remove("hidden");
+    },
+
+    hideLoader() {
+        document.getElementById("loader").classList.add("hidden");
+    },
+
+
+    // ==========================================================
+    // STATUS BADGE
+    // ==========================================================
+
+    // tipo: "muted" | "success" | "danger" | "primary"
+    setStatusBadge(texto, tipo = "muted") {
+        const badge = document.getElementById("status-badge");
+        badge.innerText = texto;
+        badge.style.color = `var(--${tipo})`;
+    },
+
+
+    // ==========================================================
+    // VISIBILIDADE DE ELEMENTOS
+    // ==========================================================
+
+    showElement(id) {
+        document.getElementById(id)?.classList.remove("hidden");
+    },
+
+    hideElement(id) {
+        document.getElementById(id)?.classList.add("hidden");
+    },
+
+
+    // ==========================================================
+    // FUNCIONALIDADES DISPONÍVEIS
+    // Exibe/oculta seções conforme arquivos carregados
+    // ==========================================================
+
+    atualizarFuncionalidadesDisponiveis() {
+        const temGps = !!AppState.rawGps;
+        const temPax = !!AppState.rawPax;
+
+        // Botão processar só aparece com GPS (bilhetagem é opcional)
+        if (temGps) this.showElement("btn-processar");
+
+        // Seção de operações só com GPS processado
+        // (será exibida pelo updateDashboard após processamento)
+    },
+
+
+    // ==========================================================
+    // SELETOR DE EMPRESAS
+    // ==========================================================
+
+    showSeletorEmpresas(empresas, onConfirmar) {
+        // const section   = document.getElementById("company-selector-section");
+        const section   = document.getElementById("company-selector-section");
+        const container = document.getElementById("company-checkboxes");
+
+        container.innerHTML = empresas.map(emp => `
+            <label style="display:flex; gap:8px; cursor:pointer; align-items:center;">
+                <input type="checkbox" class="company-select" value="${emp}" checked>
+                ${emp}
+            </label>
+        `).join("");
+
+        section.classList.remove("hidden");
+
+        document.getElementById("btn-iniciar-processamento").onclick = () => {
+            const selecionadas = Array.from(
+                document.querySelectorAll(".company-select:checked")
+            ).map(cb => cb.value);
+
+            if (selecionadas.length === 0) {
+                return alert("Selecione ao menos uma empresa.");
+            }
+
+            section.classList.add("hidden");
+            onConfirmar(selecionadas);
+        };
+    },
+
+
+    // ==========================================================
+    // DASHBOARD PRINCIPAL
+    // Ponto de entrada após processamento ou importação
+    // ==========================================================
+
+    updateDashboard(session) {
+        const r = session.resumo;
+
+        // Estatísticas
+        document.getElementById("stat-total-pax").innerText      = r.totalPax.toLocaleString();
+        document.getElementById("stat-assigned-pax").innerText   = r.atribuidos.toLocaleString();
+        document.getElementById("stat-unassigned-pax").innerText = r.naoAtribuidos.toLocaleString();
+        document.getElementById("stat-total-trips").innerText    = r.totalViagens.toLocaleString();
+        document.getElementById("stat-total-omissoes").innerText = r.omissoes.toLocaleString();
+
+        // Exibe seções
+        ["summary-section", "exception-section", "suggestions-section", "actions-section"]
+            .forEach(id => this.showElement(id));
+
+        // Popula filtro de empresas
+        this._popularFiltroEmpresas(session);
+
+        // Renderiza tabelas
+        this.renderExcecoes(session.passageiros.filter(p => !p.assigned));
+        this.renderSugestoes(session.sugestoes);
+        this.atualizarSeletorViagens();
+
+        // Atualiza ícones lucide (caso a seção estivesse oculta)
+        lucide.createIcons();
+    },
+
+
+    // ==========================================================
+    // TABELA DE EXCEÇÕES (passageiros não atribuídos)
+    // ==========================================================
+
+    renderExcecoes(lista) {
+        const tbody = document.getElementById("table-exceptions-body");
+        const limite = APP_CONFIG.ui.excecoesPorPagina;
+
+        tbody.innerHTML = lista.slice(0, limite).map(p => `
+            <tr>
+                <td class="p-4">
+                    <input type="checkbox" class="pax-checkbox" value="${p.id}">
+                </td>
+                <td>${p.horario}</td>
+                <td style="color:var(--primary)">${p.empresa}</td>
+                <td>${p.veiculo}</td>
+                <td>${p.linha}</td>
+                <td>${p.tipo}</td>
+            </tr>
+        `).join("");
+
+        // Atualiza contador ao marcar/desmarcar
+        tbody.querySelectorAll(".pax-checkbox").forEach(cb => {
+            cb.addEventListener("change", () => this._atualizarContadorSelecionados());
+        });
+
+        // Aviso de truncamento
+        if (lista.length > limite) {
+            tbody.insertAdjacentHTML("beforeend", `
+                <tr>
+                    <td colspan="6" style="text-align:center; color:var(--text-muted);
+                        font-size:0.8rem; padding:8px;">
+                        Exibindo ${limite} de ${lista.length.toLocaleString()} registros.
+                        Use os filtros para refinar.
+                    </td>
+                </tr>
+            `);
+        }
+    },
+
+
+    // ==========================================================
+    // TABELA DE SUGESTÕES (etapa C)
+    // ==========================================================
+
+    renderSugestoes(sugestoes) {
+        const section = document.getElementById("suggestions-section");
+        if (!sugestoes || sugestoes.length === 0) {
+            section.classList.add("hidden");
+            return;
+        }
+
+        section.classList.remove("hidden");
+
+        const autoMin = APP_CONFIG.ui.confiancaAutoSelecionavel;
+        const tbody   = document.getElementById("table-suggestions-body");
+
+        const motivoLabel = {
+            gap_curto:       "Terminal (gap curto)",
+            gap_longo:       "Entrepico (gap longo)",
+            linha_divergente:"Linha divergente"
+        };
+
+        tbody.innerHTML = sugestoes.map(s => {
+            const autoCheck  = s.confianca >= autoMin ? "checked" : "";
+            const corBarra   = s.confianca >= 70 ? "var(--success)"
+                             : s.confianca >= 45 ? "var(--warning)"
+                             : "var(--text-muted)";
+
+            return `
+                <tr>
+                    <td class="p-4">
+                        <input type="checkbox" class="sugestao-checkbox"
+                            value="${s.paxId}" ${autoCheck}>
+                    </td>
+                    <td>${s.pax.horario}</td>
+                    <td style="color:var(--primary)">${s.pax.empresa}</td>
+                    <td>${s.pax.veiculo}</td>
+                    <td>${s.pax.linha}</td>
+                    <td>${motivoLabel[s.motivo] || s.motivo}</td>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <div style="width:50px; height:6px; background:var(--bg-input);
+                                        border-radius:3px; overflow:hidden;">
+                                <div style="width:${s.confianca}%; height:100%;
+                                            background:${corBarra};"></div>
+                            </div>
+                            <span style="font-size:0.78rem; color:var(--text-muted);">
+                                ${s.confianca}%
+                            </span>
+                        </div>
+                    </td>
+                    <td style="font-size:0.8rem; color:var(--text-muted);">
+                        ${this._formatarViagemSugestao(s.viagem)}
+                    </td>
+                </tr>
+            `;
+        }).join("");
+
+        document.getElementById("stat-sugestoes").innerText = sugestoes.length;
+    },
+
+    _formatarViagemSugestao(v) {
+        const hi = v.isOmissao ? v.partidaPlanejada : v.partidaReal;
+        const hf = v.isOmissao ? v.chegadaPlanejada : v.chegadaReal;
+        return `${v.linha_base} | ${v.veiculo || "—"} | ${hi ? hi.substring(0, 5) : "—"} | ${hf ? hf.substring(0, 5) : "—"}`;
+    },
+
+
+    // ==========================================================
+    // SELETOR DE VIAGEM (atribuição manual)
+    // ==========================================================
+
+    atualizarSeletorViagens() {
+        const select  = document.getElementById("select-target-trip");
+        const fVeic   = document.getElementById("target-filter-veiculo")?.value.trim() || "";
+        const fLinha  = document.getElementById("target-filter-linha")?.value.toLowerCase().trim() || "";
+
+        if (!AppState.session) return;
+        if (!fVeic && !fLinha) {
+            select.innerHTML = "<option value=''>Use os filtros ao lado para buscar...</option>";
+            return;
+        }
+
+        const viagens = AppState.session.viagens
+            .filter(v => {
+                const matchV = !fVeic  || String(v.veiculo).includes(fVeic);
+                const matchL = !fLinha || v.linha.toLowerCase().includes(fLinha);
+                return matchV && matchL;
+            })
+            .sort((a, b) => {
+                if (a.linha_base !== b.linha_base) return a.linha_base.localeCompare(b.linha_base);
+                if (a.veiculo    !== b.veiculo)    return String(a.veiculo).localeCompare(String(b.veiculo));
+                const hA = a.isOmissao ? a.partidaPlanejada : a.partidaReal;
+                const hB = b.isOmissao ? b.partidaPlanejada : b.partidaReal;
+                return (hA || "").localeCompare(hB || "");
+            });
+
+        if (viagens.length === 0) {
+            select.innerHTML = "<option value=''>Nenhuma viagem encontrada.</option>";
+            return;
+        }
+
+        select.innerHTML = "<option value=''>Selecione a viagem destino...</option>"
+            + viagens.map(v => {
+                // Ícone de estado
+                let icone = "[P]";
+                if (v.isOmissao)            icone = "[O]";
+                else if (v.convertidaDeOmissao) icone = "[C]";
+                else if (v.isExtra)             icone = "[X]";
+                else if (v.isEditada)           icone = "[E]";
+
+                const hIni = v.isOmissao ? v.partidaPlanejada  : v.partidaReal;
+                const hFim = v.isOmissao ? v.chegadaPlanejada  : v.chegadaReal;
+                const veic = this._pad(v.veiculo || "------", 6);
+                const lin  = this._pad(v.linha_base, 5);
+                const sen  = this._pad(v.sentido,    5);
+                const pax  = String(v.paxEfetivos.length).padStart(3, " ");
+
+                const label = `${icone} [${veic}] ${lin} | ${sen} | `
+                    + `${(hIni || "").substring(0, 5)} às ${(hFim || "").substring(0, 5)} `
+                    + `(${pax} pax)`;
+
+                return `<option value="${v.id}">${label.replace(/ /g, "\u00A0")}</option>`;
+            }).join("");
+
+        // Alerta de omissão ao selecionar viagem do tipo [O]
+        select.onchange = () => {
+            const vid   = select.value;
+            const alert = document.getElementById("omissao-alert");
+            if (!vid || !alert) return;
+            const v = AppState.session.viagens.find(t => t.id === vid);
+            alert.style.display = v?.isOmissao ? "flex" : "none";
+        };
+    },
+
+
+    // ==========================================================
+    // FILTROS DA TABELA DE EXCEÇÕES
+    // ==========================================================
+
+    initFiltros() {
+        // Inicialização: nada especial por enquanto
+    },
+
+    aplicarFiltros() {
+        if (!AppState.session) return;
+
+        const fEmp   = document.getElementById("filter-empresa")?.value || "";
+        const fVeic  = document.getElementById("filter-veiculo")?.value.trim() || "";
+        const fLinha = document.getElementById("filter-linha")?.value.trim().toLowerCase() || "";
+        const fIni   = document.getElementById("filter-inicio")?.value || "";
+        const fFim   = document.getElementById("filter-fim")?.value || "";
+
+        const toMin = (hhmm) => {
+            if (!hhmm) return null;
+            const [h, m] = hhmm.split(":").map(Number);
+            return h * 60 + m;
+        };
+        const mIni = toMin(fIni);
+        const mFim = toMin(fFim);
+
+        const orphaos = AppState.session.passageiros.filter(p => !p.assigned);
+
+        const filtrados = orphaos.filter(p => {
+            if (fEmp   && p.empresa !== fEmp)                          return false;
+            if (fVeic  && !String(p.veiculo).includes(fVeic))         return false;
+            if (fLinha && !p.linha.toLowerCase().includes(fLinha))     return false;
+            if (mIni !== null && p.mHorario < mIni)                   return false;
+            if (mFim !== null && p.mHorario > mFim)                   return false;
+            return true;
+        });
+
+        this.renderExcecoes(filtrados);
+        this.resetSelectAll();
+        document.getElementById("count-selected").innerText =
+            `${filtrados.length} encontrados`;
+    },
+
+    limparFiltros() {
+        ["filter-empresa", "filter-veiculo", "filter-linha",
+         "filter-inicio", "filter-fim"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = "";
+        });
+
+        if (AppState.session) {
+            this.renderExcecoes(
+                AppState.session.passageiros.filter(p => !p.assigned)
+            );
+        }
+
+        this.resetSelectAll();
+        this._atualizarContadorSelecionados();
+    },
+
+
+    // ==========================================================
+    // SELECT ALL / CONTADOR
+    // ==========================================================
+
+    initSelectAll() {
+        const cb = document.getElementById("select-all-pax");
+        if (!cb) return;
+        cb.addEventListener("change", () => {
+            document.querySelectorAll(".pax-checkbox")
+                .forEach(c => c.checked = cb.checked);
+            this._atualizarContadorSelecionados();
+        });
+    },
+
+    resetSelectAll() {
+        const cb = document.getElementById("select-all-pax");
+        if (cb) cb.checked = false;
+        this._atualizarContadorSelecionados();
+    },
+
+    _atualizarContadorSelecionados() {
+        const n = document.querySelectorAll(".pax-checkbox:checked").length;
+        document.getElementById("count-selected").innerText = `${n} selecionados`;
+    },
+
+
+    // ==========================================================
+    // MODAL GENÉRICO
+    // ==========================================================
+
+    showModal(titulo, htmlContent) {
+        document.getElementById("modal-container")?.remove();
+        document.body.classList.add("modal-open");
+
+        document.body.insertAdjacentHTML("beforeend", `
+            <div class="modal-overlay" id="modal-container">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 style="font-size:1.1rem; color:var(--primary); margin:0;">
+                            ${titulo}
+                        </h2>
+                        <button class="btn-close-modal" id="btn-close-modal-top">✕</button>
+                    </div>
+                    <div class="modal-body">${htmlContent}</div>
+                    <div class="modal-footer">
+                        <button class="action-card"
+                            style="width:auto; padding:8px 20px; background:var(--bg-card);"
+                            id="btn-close-modal-bottom">
+                            Fechar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        const fechar = () => {
+            document.getElementById("modal-container")?.remove();
+            document.body.classList.remove("modal-open");
+        };
+
+        document.getElementById("btn-close-modal-top").onclick    = fechar;
+        document.getElementById("btn-close-modal-bottom").onclick  = fechar;
+        document.getElementById("modal-container").onclick = (e) => {
+            if (e.target.id === "modal-container") fechar();
+        };
+    },
+
+
+    // ==========================================================
+    // AUTO FILL AUDIT
+    // Preenche filtros e seletor a partir do módulo Anomalies
+    // ==========================================================
+
+    autoFillAudit(veiculo, tripId) {
+        document.getElementById("modal-container")?.remove();
+        document.body.classList.remove("modal-open");
+
+        // Preenche filtro de passageiros por veículo
+        const fVeic = document.getElementById("filter-veiculo");
+        if (fVeic) fVeic.value = veiculo;
+        this.aplicarFiltros();
+
+        // Preenche o seletor de viagens pela linha da viagem alvo
+        const viagem = AppState.session?.viagens.find(v => v.id === tripId);
+        if (viagem) {
+            const fLinha = document.getElementById("target-filter-linha");
+            if (fLinha) fLinha.value = viagem.linha_base;
+        }
+
+        document.getElementById("target-filter-veiculo").value = "";
+        this.atualizarSeletorViagens();
+
+        // Seleciona a viagem alvo no combo
+        setTimeout(() => {
+            const select = document.getElementById("select-target-trip");
+            if (select && Array.from(select.options).some(o => o.value === tripId)) {
+                select.value = tripId;
+                select.dispatchEvent(new Event("change"));
+            }
+            document.getElementById("exception-section")?.scrollIntoView({ behavior: "smooth" });
+        }, 150);
+    },
+
+
+    // ==========================================================
+    // AUXILIARES INTERNOS
+    // ==========================================================
+
+    _popularFiltroEmpresas(session) {
+        const select   = document.getElementById("filter-empresa");
+        const empresas = [...new Set(session.viagens.map(v => v.empresa).filter(Boolean))];
+        select.innerHTML = "<option value=''>Empresa (Todas)</option>"
+            + empresas.map(e => `<option value="${e}">${e}</option>`).join("");
+    },
+
+    // Pad de string para alinhamento monospaced no seletor de viagens
+    _pad(str, length) {
+        str = String(str || "");
+        return str.length >= length
+            ? str.substring(0, length)
+            : str + "\u00A0".repeat(length - str.length);
+    }
+};

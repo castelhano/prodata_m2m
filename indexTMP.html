@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TransSync Pro</title>
+
+    <!-- Vendor -->
+    <script src="vendor/papaparse.min.js"></script>
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script> -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+
+    <style>
+        /* ── TOKENS ─────────────────────────────────────────────── */
+        :root {
+            --bg:           #0a0b0e;
+            --bg-card:      #111318;
+            --bg-elevated:  #16191f;
+            --bg-input:     #0e1015;
+
+            --border:       rgba(255,255,255,0.07);
+            --border-hover: rgba(255,255,255,0.14);
+
+            --primary:      #3b82f6;
+            --primary-dim:  rgba(59,130,246,0.12);
+            --success:      #22c55e;
+            --success-dim:  rgba(34,197,94,0.10);
+            --warning:      #f59e0b;
+            --warning-dim:  rgba(245,158,11,0.10);
+            --danger:       #ef4444;
+            --danger-dim:   rgba(239,68,68,0.10);
+            --muted:        #6b7280;
+
+            --text-main:    #e8eaf0;
+            --text-secondary: #8b95a5;
+            --text-muted:   #4b5563;
+
+            --font-display: 'Syne', sans-serif;
+            --font-body:    'Inter', sans-serif;
+            --font-mono:    'DM Mono', monospace;
+
+            --radius:       10px;
+            --radius-sm:    6px;
+        }
+
+        /* ── RESET ───────────────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            font-size: 14px;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Subtle grid texture */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .page-wrap {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px 80px;
+        }
+
+        .hidden { display: none !important; }
+
+        /* ── HEADER ─────────────────────────────────────────────── */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(10,11,14,0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 1.1rem;
+            letter-spacing: -0.01em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-main);
+        }
+
+        .logo i { color: var(--primary); width: 18px; height: 18px; }
+        .logo .accent { color: var(--primary); }
+        .logo .version {
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            font-weight: 400;
+            margin-left: 2px;
+            letter-spacing: 0.05em;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        #status-badge {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            color: var(--muted);
+            letter-spacing: 0.03em;
+        }
+
+        /* ── STAGE LABEL ─────────────────────────────────────────── */
+        .stage {
+            margin-top: 40px;
+        }
+
+        .stage-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .stage-number {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 3px 8px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .stage-title {
+            font-family: var(--font-display);
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .stage-line {
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* ── IMPORT GRID ─────────────────────────────────────────── */
+        .import-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .drop-zone {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s, transform 0.15s;
+            text-align: center;
+        }
+
+        .drop-zone:hover {
+            border-color: var(--border-hover);
+            background: var(--bg-elevated);
+            transform: translateY(-1px);
+        }
+
+        .drop-zone.ready {
+            border-color: var(--success);
+            background: var(--success-dim);
+        }
+
+        .drop-zone i {
+            width: 28px;
+            height: 28px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .drop-zone.ready i { color: var(--success); }
+
+        .drop-zone strong {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 0.82rem;
+            color: var(--text-main);
+            letter-spacing: 0.02em;
+        }
+
+        .drop-zone p {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        /* ── COMPANY SELECTOR ────────────────────────────────────── */
+        .company-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+        }
+
+        .company-card h3 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            margin-bottom: 14px;
+        }
+
+        #company-checkboxes {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+
+        .company-chip {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 5px 14px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            transition: border-color 0.15s, background 0.15s;
+        }
+
+        .company-chip:has(input:checked) {
+            border-color: var(--primary);
+            background: var(--primary-dim);
+            color: var(--primary);
+        }
+
+        .company-chip input { display: none; }
+
+        /* ── STATS GRID ──────────────────────────────────────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px 18px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            background: var(--text-muted);
+            border-radius: 0 2px 2px 0;
+        }
+
+        .stat-card.success::before { background: var(--success); }
+        .stat-card.warning::before { background: var(--warning); }
+        .stat-card.primary::before { background: var(--primary); }
+
+        .stat-card p {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-family: var(--font-mono);
+            margin-bottom: 6px;
+        }
+
+        .stat-card h3 {
+            font-family: var(--font-display);
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--text-main);
+            line-height: 1;
+        }
+
+        /* ── PANEL (exceptions / suggestions) ───────────────────── */
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .panel-title {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-title i { width: 15px; height: 15px; }
+
+        .panel-body { padding: 0; }
+
+        /* ── FILTER BAR ──────────────────────────────────────────── */
+        .filter-bar {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            background: var(--bg-elevated);
+            border-radius: var(--radius) var(--radius) 0 0;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .filter-group label {
+            font-size: 0.65rem;
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+        }
+
+        input[type="text"],
+        input[type="time"],
+        select {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            padding: 7px 10px;
+            outline: none;
+            transition: border-color 0.15s;
+            min-width: 0;
+        }
+
+        input[type="text"]:focus,
+        input[type="time"]:focus,
+        select:focus {
+            border-color: var(--primary);
+        }
+
+        input[type="checkbox"] {
+            accent-color: var(--primary);
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+        }
+
+        /* ── TABLE ───────────────────────────────────────────────── */
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead th {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            transition: background 0.1s;
+        }
+
+        tbody tr:hover { background: rgba(255,255,255,0.02); }
+        tbody tr:last-child { border-bottom: none; }
+
+        tbody td {
+            padding: 9px 12px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        tbody td:first-child { padding-left: 16px; }
+        thead th:first-child { padding-left: 16px; }
+
+        .td-mono { font-family: var(--font-mono); font-size: 0.76rem; }
+        .td-primary { color: var(--primary) !important; font-weight: 500; }
+
+        /* ── ASSIGN FOOTER ───────────────────────────────────────── */
+        .assign-footer {
+            background: var(--bg-elevated);
+            border-top: 1px solid var(--border);
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border-radius: 0 0 var(--radius) var(--radius);
+        }
+
+        .assign-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .assign-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        #omissao-alert {
+            display: none;
+            align-items: center;
+            gap: 7px;
+            color: var(--warning);
+            font-size: 0.76rem;
+            font-weight: 500;
+        }
+
+        #omissao-alert i { width: 14px; height: 14px; }
+
+        #count-selected {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        /* ── SUGGESTIONS ─────────────────────────────────────────── */
+        .confidence-bar-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .confidence-bar {
+            width: 60px;
+            height: 4px;
+            background: var(--bg-input);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .confidence-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+        }
+
+        .badge {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            font-weight: 500;
+            padding: 2px 7px;
+            border-radius: 3px;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-success { background: var(--success-dim); color: var(--success); }
+        .badge-warning { background: var(--warning-dim); color: var(--warning); }
+        .badge-muted   { background: rgba(255,255,255,0.04); color: var(--text-muted); }
+
+        .sugestao-footer {
+            background: var(--bg-elevated);
+            border-top: 1px solid var(--border);
+            padding: 12px 18px;
+            display: flex;
+            justify-content: flex-end;
+            border-radius: 0 0 var(--radius) var(--radius);
+        }
+
+        /* ── BUTTONS ─────────────────────────────────────────────── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 18px;
+            border-radius: var(--radius-sm);
+            border: none;
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 0.76rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: opacity 0.15s, transform 0.1s;
+            white-space: nowrap;
+        }
+
+        .btn:hover { opacity: 0.88; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .btn i { width: 14px; height: 14px; }
+
+        .btn-primary  { background: var(--primary); color: #fff; }
+        .btn-success  { background: var(--success); color: #fff; }
+        .btn-ghost    { background: var(--bg-elevated); color: var(--text-secondary); border: 1px solid var(--border); }
+        .btn-sm       { padding: 5px 12px; font-size: 0.68rem; }
+
+        /* ── ACTIONS GRID ────────────────────────────────────────── */
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .action-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            cursor: pointer;
+            text-align: left;
+            transition: border-color 0.2s, background 0.2s, transform 0.15s;
+            color: var(--text-main);
+        }
+
+        .action-card:hover {
+            border-color: var(--border-hover);
+            background: var(--bg-elevated);
+            transform: translateY(-1px);
+        }
+
+        .action-card .icon-box {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: var(--bg-elevated);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .action-card .icon-box i {
+            width: 17px;
+            height: 17px;
+            color: var(--text-muted);
+        }
+
+        .action-card.c-primary .icon-box i { color: var(--primary); }
+        .action-card.c-success .icon-box i { color: var(--success); }
+        .action-card.c-warning .icon-box i { color: var(--warning); }
+        .action-card.c-danger  .icon-box i { color: var(--danger); }
+
+        .action-label {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 0.82rem;
+            line-height: 1.3;
+        }
+
+        .action-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+            font-weight: 400;
+            font-family: var(--font-body);
+        }
+
+        /* ── MODAL ───────────────────────────────────────────────── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.72);
+            backdrop-filter: blur(6px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            animation: fadeIn 0.15s ease;
+        }
+
+        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 680px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            animation: slideUp 0.18s ease;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(10px) }
+            to   { opacity: 1; transform: translateY(0) }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header h2 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 0.9rem;
+            letter-spacing: 0.04em;
+            color: var(--primary);
+        }
+
+        .btn-close-modal {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.9rem;
+            padding: 4px;
+            line-height: 1;
+            transition: color 0.15s;
+        }
+
+        .btn-close-modal:hover { color: var(--text-main); }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+            font-size: 0.83rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        .modal-body table {
+            font-size: 0.78rem;
+        }
+
+        .modal-body table thead th {
+            color: var(--text-muted);
+        }
+
+        .modal-footer {
+            padding: 14px 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        /* ── LOADER ──────────────────────────────────────────────── */
+        #loader {
+            position: fixed;
+            inset: 0;
+            background: rgba(10,11,14,0.88);
+            backdrop-filter: blur(8px);
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 2px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg) } }
+
+        #loader p {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+        }
+
+        /* ── SCROLLBAR ───────────────────────────────────────────── */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+        /* ── TRUNCATE NOTICE ─────────────────────────────────────── */
+        .truncate-notice td {
+            text-align: center;
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            padding: 10px;
+            letter-spacing: 0.05em;
+        }
+
+        /* ── MODAL OPEN ──────────────────────────────────────────── */
+        body.modal-open { overflow: hidden; }
+
+        /* ── RESPONSIVE ──────────────────────────────────────────── */
+        @media (max-width: 768px) {
+            .import-grid { grid-template-columns: 1fr; }
+            .stats-grid  { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── HEADER ───────────────────────────────────────────────── -->
+    <header>
+        <div class="header-inner">
+            <div class="logo">
+                <i data-lucide="bus-front"></i>
+                TransSync <span class="accent">Pro</span>
+                <span class="version">v1.2</span>
+            </div>
+            <div class="header-right">
+                <div id="status-badge">Aguardando arquivos...</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="page-wrap">
+
+        <!-- ══════════════════════════════════════════════════════
+             ETAPA 01 — IMPORTAÇÃO
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="stage">
+            <div class="stage-header">
+                <span class="stage-number">01</span>
+                <span class="stage-title">Importação</span>
+                <div class="stage-line"></div>
+            </div>
+
+            <div class="import-grid">
+
+                <!-- GPS -->
+                <div class="drop-zone" id="drop-gps">
+                    <input type="file" id="input-gps" class="hidden" accept=".csv">
+                    <i data-lucide="upload-cloud"></i>
+                    <strong>GPS / Viagens</strong>
+                    <p>Arquivo .csv exportado do sistema</p>
+                </div>
+
+                <!-- Bilhetagem -->
+                <div class="drop-zone" id="drop-pax">
+                    <input type="file" id="input-pax" class="hidden" accept=".csv">
+                    <i data-lucide="file-spreadsheet"></i>
+                    <strong>Bilhetagem</strong>
+                    <p>Planilha .csv de passageiros</p>
+                </div>
+
+                <!-- Importar trabalho -->
+                <div class="drop-zone" id="drop-json"
+                     onclick="document.getElementById('input-import-json').click()">
+                    <input type="file" id="input-import-json" class="hidden"
+                           accept=".json" onchange="Storage.importJSON(this.files[0])">
+                    <i data-lucide="folder-sync"></i>
+                    <strong>Trabalho Salvo</strong>
+                    <p>Restaurar arquivo .json</p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════
+             ETAPA 02 — CONFIGURAÇÃO (seletor de empresas)
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="stage" id="company-selector-section" style="display:none;">
+            <div class="stage-header">
+                <span class="stage-number">02</span>
+                <span class="stage-title">Operadoras</span>
+                <div class="stage-line"></div>
+            </div>
+
+            <div class="company-card">
+                <h3>Empresas detectadas no arquivo</h3>
+                <div id="company-checkboxes"></div>
+                <button id="btn-iniciar-processamento" class="btn btn-primary">
+                    <i data-lucide="play"></i>
+                    Iniciar Conciliação
+                </button>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════
+             ETAPA 03 — RESUMO
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="stage hidden" id="summary-section">
+            <div class="stage-header">
+                <span class="stage-number">03</span>
+                <span class="stage-title">Resumo da Conciliação</span>
+                <div class="stage-line"></div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <p>Total Passageiros</p>
+                    <h3 id="stat-total-pax">—</h3>
+                </div>
+                <div class="stat-card success">
+                    <p>Conciliados</p>
+                    <h3 id="stat-assigned-pax">—</h3>
+                </div>
+                <div class="stat-card warning">
+                    <p>Pendentes</p>
+                    <h3 id="stat-unassigned-pax">—</h3>
+                </div>
+                <div class="stat-card">
+                    <p>Viagens GPS</p>
+                    <h3 id="stat-total-trips">—</h3>
+                </div>
+                <div class="stat-card primary">
+                    <p>Omissões</p>
+                    <h3 id="stat-total-omissoes">—</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════
+             ETAPA 04 — TRATATIVAS
+             4a) Sugestões automáticas (Etapa C)
+             4b) Exceções / Atribuição manual
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="stage hidden" id="suggestions-section">
+            <div class="stage-header">
+                <span class="stage-number">04a</span>
+                <span class="stage-title">Sugestões Automáticas</span>
+                <div class="stage-line"></div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <i data-lucide="sparkles"></i>
+                        Passageiros com viagem sugerida pelo engine
+                    </div>
+                    <button id="btn-confirmar-sugestoes" class="btn btn-success btn-sm">
+                        <i data-lucide="check"></i>
+                        Atribuir selecionados
+                    </button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:36px;"><input type="checkbox" id="select-all-sugestoes"></th>
+                                <th>Passageiro</th>
+                                <th>Horário</th>
+                                <th>Empresa</th>
+                                <th>Veículo</th>
+                                <th>Linha</th>
+                                <th>Viagem Sugerida</th>
+                                <th>Motivo</th>
+                                <th>Confiança</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-suggestions-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4b — Exceções / Atribuição manual -->
+        <div class="stage hidden" id="exception-section">
+            <div class="stage-header">
+                <span class="stage-number">04b</span>
+                <span class="stage-title">Exceções · Atribuição Manual</span>
+                <div class="stage-line"></div>
+            </div>
+
+            <div class="panel">
+                <!-- Filtros -->
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <label>Empresa</label>
+                        <select id="filter-empresa" style="width:130px;">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Veículo</label>
+                        <input type="text" id="filter-veiculo" placeholder="1077" style="width:80px;">
+                    </div>
+                    <div class="filter-group">
+                        <label>Linha</label>
+                        <input type="text" id="filter-linha" placeholder="A14" style="width:80px;">
+                    </div>
+                    <div class="filter-group">
+                        <label>Início</label>
+                        <input type="time" id="filter-inicio" style="width:100px;">
+                    </div>
+                    <div class="filter-group">
+                        <label>Fim</label>
+                        <input type="time" id="filter-fim" style="width:100px;">
+                    </div>
+                    <button id="filter_btn" class="btn btn-primary btn-sm">
+                        <i data-lucide="search"></i> Filtrar
+                    </button>
+                    <button id="clear_btn" class="btn btn-ghost btn-sm">
+                        <i data-lucide="x"></i> Limpar
+                    </button>
+                </div>
+
+                <!-- Tabela de exceções -->
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:36px;"><input type="checkbox" id="select-all-pax"></th>
+                                <th>Horário</th>
+                                <th>Empresa</th>
+                                <th>Veículo</th>
+                                <th>Linha</th>
+                                <th>Tipo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-exceptions-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Atribuição manual -->
+                <div class="assign-footer">
+                    <div class="assign-row">
+                        <div class="filter-group">
+                            <label>Veículo destino</label>
+                            <input type="text" id="target-filter-veiculo"
+                                   placeholder="1074" style="width:88px;">
+                        </div>
+                        <div class="filter-group">
+                            <label>Linha destino</label>
+                            <input type="text" id="target-filter-linha"
+                                   placeholder="A14" style="width:88px;">
+                        </div>
+                        <button id="btn-buscar-viagens" class="btn btn-ghost btn-sm" style="margin-bottom:1px;">
+                            <i data-lucide="search"></i> Buscar
+                        </button>
+                        <div class="filter-group" style="flex:1; min-width:200px;">
+                            <label>Viagem de destino</label>
+                            <select id="select-target-trip" style="width:100%;">
+                                <option value="">— filtre acima para buscar —</option>
+                            </select>
+                        </div>
+                        <button id="btn-assign"
+                                style="margin-bottom:1px;"
+                                class="btn btn-success">
+                            <i data-lucide="corner-down-right"></i>
+                            Atribuir
+                        </button>
+                    </div>
+
+                    <div class="assign-meta">
+                        <div id="omissao-alert">
+                            <i data-lucide="alert-triangle"></i>
+                            Destino é omissão — atribuição tornará a viagem produtiva.
+                        </div>
+                        <div style="flex:1;"></div>
+                        <div id="count-selected">0 selecionados</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════
+             ETAPA 05 — ANÁLISE & AÇÕES
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="stage hidden" id="actions-section">
+            <div class="stage-header">
+                <span class="stage-number">05</span>
+                <span class="stage-title">Análise &amp; Exportação</span>
+                <div class="stage-line"></div>
+            </div>
+
+            <div class="actions-grid">
+
+                <button class="action-card c-warning" onclick="Anomalies.checkOmissoes()">
+                    <div class="icon-box"><i data-lucide="alert-circle"></i></div>
+                    <div>
+                        <div class="action-label">Omissões com PAX</div>
+                        <div class="action-desc">Detecta viagens omitidas com passageiros órfãos na janela</div>
+                    </div>
+                </button>
+
+                <button class="action-card c-primary" onclick="Anomalies.checkEditadas()">
+                    <div class="icon-box"><i data-lucide="file-pen"></i></div>
+                    <div>
+                        <div class="action-label">Editadas sem PAX</div>
+                        <div class="action-desc">Viagens com flag Editada mas sem passageiro conciliado</div>
+                    </div>
+                </button>
+
+                <button class="action-card" onclick="Anomalies.gerenciarOmissoes()">
+                    <div class="icon-box"><i data-lucide="list-checks"></i></div>
+                    <div>
+                        <div class="action-label">Gerenciar Omissões</div>
+                        <div class="action-desc">Visualizar e marcar tratamento das omissões do dia</div>
+                    </div>
+                </button>
+
+                <button class="action-card c-success" onclick="Storage.exportJSON()">
+                    <div class="icon-box"><i data-lucide="download-cloud"></i></div>
+                    <div>
+                        <div class="action-label">Exportar Trabalho</div>
+                        <div class="action-desc">Salva JSON com sessão completa para retomada</div>
+                    </div>
+                </button>
+
+                <button class="action-card c-success" onclick="alert('Gerando...')">
+                    <div class="icon-box"><i data-lucide="file-down"></i></div>
+                    <div>
+                        <div class="action-label">Resumo Horário</div>
+                        <div class="action-desc">Exportar CSV com síntese por horário de viagem</div>
+                    </div>
+                </button>
+
+            </div>
+        </div>
+
+    </div><!-- /page-wrap -->
+
+    <!-- ── LOADER ──────────────────────────────────────────────── -->
+    <div id="loader" class="hidden">
+        <div class="spinner"></div>
+        <p>Processando dados...</p>
+    </div>
+
+    <!-- ── SCRIPTS ─────────────────────────────────────────────── -->
+    <script src="js/settings.js"></script>
+    <script src="js/DataNormalizer.js"></script>
+    <script src="js/Parser.js"></script>
+    <script src="js/Engine.js"></script>
+    <script src="js/Storage.js"></script>
+    <script src="js/UIController.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/modules/Anomalies.js"></script>
+
+    <script>
+    // ── Ícones ──────────────────────────────────────────────────
+    lucide.createIcons();
+
+    // ── Upload cards ────────────────────────────────────────────
+    function setupCard(cardId, inputId) {
+        const card  = document.getElementById(cardId);
+        const input = document.getElementById(inputId);
+        if (!card || !input) return;
+
+        card.addEventListener('click', () => input.click());
+        input.addEventListener('click', e => e.stopPropagation());
+
+        input.addEventListener('change', e => {
+            if (!e.target.files.length) return;
+            card.classList.add('ready');
+            card.querySelector('p').innerText = e.target.files[0].name;
+        });
+    }
+
+    setupCard('drop-gps',  'input-gps');
+    setupCard('drop-pax',  'input-pax');
+
+    // ── Company-selector: renderiza chips estilizados ────────────
+    // Sobrescreve o método do UIController para usar chips
+    const _origShowSeletor = UIController.showSeletorEmpresas.bind(UIController);
+    UIController.showSeletorEmpresas = function(empresas, onConfirmar) {
+        const section   = document.getElementById('company-selector-section');
+        const container = document.getElementById('company-checkboxes');
+
+        container.innerHTML = empresas.map(emp => `
+            <label class="company-chip">
+                <input type="checkbox" class="company-select" value="${emp}" checked>
+                ${emp}
+            </label>
+        `).join('');
+
+        section.style.display = 'block';
+
+        document.getElementById('btn-iniciar-processamento').onclick = () => {
+            const selecionadas = Array.from(
+                document.querySelectorAll('.company-select:checked')
+            ).map(cb => cb.value);
+
+            if (!selecionadas.length) return alert('Selecione ao menos uma empresa.');
+            section.style.display = 'none';
+            onConfirmar(selecionadas);
+        };
+    };
+
+    // ── Select-all sugestões ──────────────────────────────────────
+    document.addEventListener('change', e => {
+        if (e.target.id === 'select-all-sugestoes') {
+            document.querySelectorAll('.sugestao-checkbox')
+                .forEach(cb => cb.checked = e.target.checked);
+        }
+    });
+    </script>
+
+</body>
+</html>

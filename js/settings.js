@@ -1,78 +1,200 @@
+// ============================================================
+// settings.js — Configuração central do TransSync Pro
+// Toda lógica de negócio parametrizável vive aqui.
+// O Engine, os módulos e a UI leem deste objeto.
+// ============================================================
+
 const APP_CONFIG = {
-    gps: {
-        colunas: {
-            data: "A",
-            linha: "B",
-            veiculo: "D",
-            motorista: "E",
-            partidaPlanejada: "G",
-            partidaReal: "H",
-            chegadaPlanejada: "K",
-            chegadaReal: "L",
-            statusViagem: "U",
-            viagemEditada: "V",
-            empresa: "Y"
-        },
-        normalizacao: {
-            empresa: {
-                "Rápido Cuiabá": "Rapido",
-                "VPAR TRANSPORTES": "Vpar",
+
+    // ----------------------------------------------------------
+    // 1. FONTES DE DADOS
+    // Cada fonte define como seu arquivo é lido e normalizado.
+    // O valor canônico de cada campo é o usado em todo o app.
+    // Adicionar nova fonte no futuro = novo bloco aqui.
+    // ----------------------------------------------------------
+    fontes: {
+
+        gps: {
+            colunas: {
+                data:               "A",
+                linha:              "B",
+                veiculo:            "D",
+                motorista:          "E",
+                partidaPlanejada:   "G",
+                partidaReal:        "H",
+                chegadaPlanejada:   "K",
+                chegadaReal:        "L",
+                statusViagem:       "U",
+                viagemEditada:      "V",
+                tabela:             "X",
+                empresa:            "Y"
             },
-            linha: { "A14 - UNICO": "A14" }
+            // De como vem no arquivo → valor canônico usado no app
+            normalizacao: {
+                empresa: {
+                    "Rápido Cuiabá":    "Rapido",
+                    "VPAR TRANSPORTES": "Vpar"
+                },
+                linha: {
+                    // Adicionar exceções conforme identificado
+                    // Ex: "A14 - UNICO": "A14"
+                },
+                veiculo: {
+                    // Exceções de numeração de frota entre arquivos
+                    // Ex: "01077": "1077"
+                }
+            }
+        },
+
+        bilhetagem: {
+            colunas: {
+                horario:    "F",
+                empresa:    "G",
+                linha:      "H",
+                veiculo:    "I",
+                tipo:       "K",
+                tarifa:     "L"
+            },
+            normalizacao: {
+                empresa: {
+                    "CARIBUS TRANSPORTES E SERVIÇOS":           "Caribus",
+                    "CMT URBANO":                               "CMT",
+                    "CONSORCIO METROPOLITANO TRANSP":           "Consorcio Met",
+                    "INTEGRAÇÃO TRANSPORTES":                   "Integracao",
+                    "MTU-CUIABA":                               "Term Cuiaba",
+                    "MTU-VARZEA GRANDE":                        "Term VG",
+                    "RAPIDO CUIABA":                            "Rapido",
+                    "UNIAO (VZG) TRANSPORTES E TURISMO LTDA":   "Uniao",
+                    "VPAR TRANSPORTES":                         "Vpar"
+                },
+                linha: {
+                    // Bilhetagem usa código numérico, GPS usa alfanumérico
+                    // Ambos convergem para o valor canônico (padrão GPS)
+                    "914":  "A14",
+                    "922":  "A22",
+                    "922B":  "A22B",
+                },
+                veiculo: {
+                    // Exceções de numeração entre arquivos
+                }
+            },
+
+            // Linhas presentes na bilhetagem que não existem no GPS.
+            // Passageiros dessas linhas são preservados no modelo de dados
+            // mas ignorados pelo Engine — sem tentativa de conciliação.
+            linhasIgnoradas: ["F01"]
         }
     },
-    bilhetagem: {
-        colunas: {
-            horario: "F",
-            empresa: "G",
-            linha: "H",
-            veiculo: "I",
-            tipo: "K",
-            tarifa: "L",
-        },
-        normalizacao: {
-            empresa: {
-                "CARIBUS TRANSPORTES E SERVIÇOS": "Caribus",
-                "CMT URBANO": "CMT",
-                "CONSORCIO METROPOLITANO TRANSP": "Consorcio Met",
-                "INTEGRAÇÃO TRANSPORTES": "Integracao",
-                "MTU-CUIABA": "Term Cuiaba",
-                "MTU-VARZEA GRANDE": "Term VG",
-                "RAPIDO CUIABA": "Rapido",
-                "UNIAO (VZG) TRANSPORTES E TURISMO LTDA": "Uniao",
-                "VPAR TRANSPORTES": "Vpar"
-            },
-            linha: { "922": "A22", "103": "103-A" }
-        }
-    },
+
+    // ----------------------------------------------------------
+    // 2. ENGINE — Regras de conciliação
+    // ----------------------------------------------------------
     engine: {
-        // Tolerâncias por sentido
+
+        // Classificação dos status de viagem no GPS
+        //
+        // statusProdutivo + statusExtra → participam normalmente das etapas A e B
+        // statusOmissao               → entram no modelo, não recebem pax automaticamente
+        // statusOcioso                → ignorados pelo Engine (preservados no modelo para uso futuro)
+        //
+        // statusExtra (3): viagem realizada sem horário planejado (extra operacional)
+        // viagemEditada (col. V "Sim"/"Nao"): atributo da viagem, lido separadamente — não é status
+        statusProdutivo: ["1"],
+        statusExtra:     ["3"],   // Tratado como produtivo pelo Engine
+        statusOmissao:   ["2"],
+        statusOcioso:    ["6"],   // Ignorado pelo Engine — reservado para uso futuro
+
+        // --- Etapa A: Match direto ---
+        // Critério duro: veiculo + linha + passageiro dentro de [mInicio, mFim]
+        // Sem tolerância. Nenhum parâmetro necessário.
+
+        // --- Etapa B: Match por tolerância ---
+        // Para passageiros fora da janela exata mas dentro das margens abaixo.
+        // Modelado por sentido para refletir embarque antecipado e desembarque tardio.
         tolerancias: {
-            "IDA": { inicio: 20, fim: 5 },
-            "VOLTA": { inicio: 20, fim: 5 },
-            "UNICO": { inicio: 15, fim: 15 }
+            "IDA":   { inicioMin: 20, fimMin: 20 },
+            "VOLTA": { inicioMin: 20, fimMin: 20 },
+            "UNICO": { inicioMin: 20, fimMin: 20 }
         },
-        // se passageiro esta entre duas viagens deve ser atribuido a proxima
-        statusViagensValidas: ["1", "3"],
-        statusOmissoes: ["2"],
-        atribuirAoProximoNoGap: true,
-        limiteGapMinutos: 30 // limite maximo para atribuicao
-    },
-    anomalies: {
+
+        // --- Etapa C: Análise de remanescentes ---
+        // O Engine classifica cada passageiro não atribuído e gera sugestões.
+        // Nenhuma atribuição automática — o usuário confirma antes de qualquer mudança.
+
+        // Limite de gap entre viagens do mesmo veículo:
+        // gap <= gapCurtoMax → passageiro no terminal → sugerir PRÓXIMA viagem
+        // gap >  gapCurtoMax → passageiro no entrepico → sugerir viagem ANTERIOR
+        gapCurtoMax: 40,   // minutos
+
+        // Pesos para cálculo de confiança das sugestões (soma define score 0–N)
+        // Veículo pesa mais que linha: troca de carro é rara, linha errada é operacionalmente possível
         pesos: {
-            matchVeiculo: 40,        // Carro planejado na omissão = Carro do passageiro
-            matchLinha: 20,          // Linha planejada na omissão = Linha do passageiro
-            gapEntreRegistros: 50,   // Omissão entre duas viagens produtivas do mesmo carro
-            densidadeAlta: 30,       // Mais de 60% dos órfãos do carro estão nesta janela
-            foraTolerancia: 15,      // Passageiros detectados na "beirada" da janela de auditoria
+            matchVeiculo:   50,   // Carro do passageiro bate com o carro da viagem candidata
+            matchLinha:     30,   // Linha canônica bate (após normalização)
+            matchSentido:   10,   // Sentido bate quando disponível
+            dentroGapCurto: 40,   // Passageiro está num gap curto (terminal entre viagens)
+            foraGapLongo:   20    // Passageiro está num gap longo (entrepico → viagem anterior)
         },
-        criterios: {
-            minPassageirosSuspeitos: 1,  // 0 ignora filtro, 1+ exige ao menos N pax
-            minPontuacaoSuspeita: 20,    // Pontuação minima para carro ser tratado como suspeito
-            janelaAuditoriaMinutos: 25,  // Raio de busca em torno do planejado
-            thresholdAlto: 80,
-            thresholdMedio: 45
+
+        // Confiança mínima para uma sugestão aparecer na interface
+        confiancaMinima: 30
+    },
+
+    // ----------------------------------------------------------
+    // 3. ANOMALIES — Parâmetros por módulo de análise
+    // Cada chave corresponde a um arquivo em js/modules/
+    // ----------------------------------------------------------
+    anomalies: {
+
+        omissoesComPax: {
+            ativo: true,
+
+            // Janela de busca em torno do horário planejado da omissão
+            janelaAuditoriaMin: 25,
+
+            // Pontuação mínima para reportar a omissão como suspeita
+            pontuacaoMinima: 20,
+
+            // Percentual mínimo dos passageiros órfãos do veículo (no dia inteiro)
+            // concentrados na janela da omissão para ativar o critério densidadeAlta.
+            // Calculado sobre TODOS os órfãos do veículo — não por viagem isolada.
+            // Ex: veículo com 125 órfãos no dia, 100 na janela = 80% → critério ativo
+            densidadePercentualMinimo: 80,
+
+            pesos: {
+                matchVeiculo:    40,   // Carro planejado da omissão bate com carro do passageiro
+                matchLinha:      20,   // Linha planejada bate com linha do passageiro
+                gapEntreViagens: 50,   // Omissão está entre duas viagens produtivas da mesma tabela
+                densidadeAlta:   30,   // Concentração de órfãos acima de densidadePercentualMinimo
+                foraTolerancia:  15    // Passageiros detectados na borda da janela de auditoria
+            },
+
+            thresholds: {
+                alto:  80,
+                medio: 45
+            }
+        },
+
+        editadasSemPax: {
+            ativo: true
+            // Lógica: viagemEditada === "Sim" + paxEfetivos.length === 0
+            // Sem parâmetros adicionais por enquanto
         }
+
+        // Novos módulos entram aqui:
+        // intervalosLongos:  { ativo: true, ... }
+        // linhasDivergentes: { ativo: true, ... }
+    },
+
+    // ----------------------------------------------------------
+    // 4. UI — Comportamento de apresentação
+    // ----------------------------------------------------------
+    ui: {
+        excecoesPorPagina: 100,
+
+        // Sugestões da etapa C com confiança >= este valor
+        // chegam pré-marcadas na interface para confirmação em lote
+        confiancaAutoSelecionavel: 70
     }
 
 };
