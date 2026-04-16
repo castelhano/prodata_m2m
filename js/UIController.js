@@ -118,7 +118,7 @@ const UIController = {
         document.getElementById("stat-total-omissoes").innerText = r.omissoes.toLocaleString();
 
         // Exibe seções
-        ["summary-section", "exception-section", "suggestions-section", "actions-section"]
+        ["section-resumo", "section-excecoes", "suggestions-section", "section-operacoes"]
             .forEach(id => this.showElement(id));
 
         // Popula filtro de empresas
@@ -188,6 +188,23 @@ const UIController = {
 
         section.classList.remove("hidden");
 
+        // Limpa filtros ao re-renderizar a lista completa
+        ["sug-filter-veiculo", "sug-filter-linha"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = "";
+        });
+
+        document.getElementById("stat-sugestoes").innerText = sugestoes.length;
+        const badge = document.getElementById("badge-sugestoes");
+        if (badge) badge.innerText = `${sugestoes.length} pendentes`;
+
+        this._renderSugestoesTabela(sugestoes);
+    },
+
+    _renderSugestoesTabela(sugestoes) {
+        const selectAll = document.getElementById("select-all-sugestoes");
+        if (selectAll) selectAll.checked = false;
+
         const autoMin = APP_CONFIG.ui.confiancaAutoSelecionavel;
         const tbody   = document.getElementById("table-suggestions-body");
 
@@ -232,8 +249,36 @@ const UIController = {
                 </tr>
             `;
         }).join("");
+    },
 
-        document.getElementById("stat-sugestoes").innerText = sugestoes.length;
+    // ==========================================================
+    // FILTROS DA TABELA DE SUGESTÕES
+    // ==========================================================
+
+    aplicarFiltrosSugestoes() {
+        if (!AppState.session) return;
+
+        const fVeic  = document.getElementById("sug-filter-veiculo")?.value.trim() || "";
+        const fLinha = document.getElementById("sug-filter-linha")?.value.trim().toLowerCase() || "";
+
+        const filtradas = AppState.session.sugestoes.filter(s => {
+            if (fVeic  && !String(s.pax.veiculo).includes(fVeic))      return false;
+            if (fLinha && !s.pax.linha.toLowerCase().includes(fLinha))  return false;
+            return true;
+        });
+
+        this._renderSugestoesTabela(filtradas);
+    },
+
+    limparFiltrosSugestoes() {
+        ["sug-filter-veiculo", "sug-filter-linha"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = "";
+        });
+
+        if (AppState.session) {
+            this._renderSugestoesTabela(AppState.session.sugestoes);
+        }
     },
 
     _formatarViagemSugestao(v) {
@@ -416,8 +461,7 @@ const UIController = {
                     </div>
                     <div class="modal-body">${htmlContent}</div>
                     <div class="modal-footer">
-                        <button class="action-card"
-                            style="width:auto; padding:8px 20px; background:var(--bg-card);"
+                        <button class="action-card btn btn-ghost"
                             id="btn-close-modal-bottom">
                             Fechar
                         </button>

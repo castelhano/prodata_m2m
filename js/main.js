@@ -161,12 +161,6 @@ document.addEventListener("DOMContentLoaded", () => {
     UIController.initFiltros();
     UIController.initSelectAll();
 
-    // Inputs de arquivo
-    document.getElementById("input-gps")
-        .addEventListener("change", e => handleFileSelect("gps", e.target.files[0]));
-    document.getElementById("input-pax")
-        .addEventListener("change", e => handleFileSelect("pax", e.target.files[0]));
-
     // Botões principais
     document.getElementById("btn-processar")
         .addEventListener("click", detectarEmpresas);
@@ -174,6 +168,12 @@ document.addEventListener("DOMContentLoaded", () => {
         .addEventListener("click", atribuirManualmente);
     document.getElementById("btn-confirmar-sugestoes")
         .addEventListener("click", confirmarSugestoesSelecionadas);
+
+    // Filtros da tabela de sugestões
+    document.getElementById("sug-filter-btn")
+        .addEventListener("click", () => UIController.aplicarFiltrosSugestoes());
+    document.getElementById("sug-clear-btn")
+        .addEventListener("click", () => UIController.limparFiltrosSugestoes());
 
     // Filtros da tabela de exceções
     document.getElementById("filter_btn")

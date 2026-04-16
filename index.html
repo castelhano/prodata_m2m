@@ -882,6 +882,24 @@ input[type="checkbox"]:checked::after {
             um e gerou sugestões — revise e confirme os que concordar.
         </p>
 
+        <!-- Filtros Sugestões -->
+        <div class="excecoes-toolbar">
+            <div class="filter-group">
+                <label>Veículo</label>
+                <input type="text" id="sug-filter-veiculo" placeholder="Ex: 1077">
+            </div>
+            <div class="filter-group">
+                <label>Linha</label>
+                <input type="text" id="sug-filter-linha" placeholder="Ex: A14">
+            </div>
+            <button id="sug-filter-btn" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
+                <i data-lucide="search"></i> Filtrar
+            </button>
+            <button id="sug-clear-btn" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
         <div class="table-wrap">
             <table>
                 <thead>
@@ -1001,7 +1019,7 @@ input[type="checkbox"]:checked::after {
                 Viagem do tipo omissão — será convertida para produtiva ao confirmar.
             </div>
             <div style="flex:1;"></div>
-            <span id="count-selected" style="color:var(--text-3);">0 selecionados</span>
+            <span id="count-selected" style="color:var(--text-2);">0 selecionados</span>
         </div>
     </section>
 

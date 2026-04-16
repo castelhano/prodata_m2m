@@ -70,6 +70,7 @@ const APP_CONFIG = {
                 linha: {
                     // Bilhetagem usa código numérico, GPS usa alfanumérico
                     // Ambos convergem para o valor canônico (padrão GPS)
+                    "902":  "A02",
                     "914":  "A14",
                     "922":  "A22",
                     "922B":  "A22B",
