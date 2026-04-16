@@ -64,16 +64,23 @@ const Anomalies = {
 
             // --- Cálculo de pontuação ---
             let score = 0;
+            const criterios = [];
 
             // Carro planejado da omissão bate com carro dos passageiros
             if (veiculoInferido) {
                 const paxDoCarro = paxNaJanela.filter(p => p.veiculo === veiculoInferido);
-                if (paxDoCarro.length > 0) score += pesos.matchVeiculo;
+                if (paxDoCarro.length > 0) {
+                    score += pesos.matchVeiculo;
+                    criterios.push({ label: `Veículo ${veiculoInferido} identificado nos passageiros`, pts: pesos.matchVeiculo });
+                }
             }
 
             // Linha planejada bate com linha dos passageiros
             const paxDaLinha = paxNaJanela.filter(p => p.linha === omissao.linha_base);
-            if (paxDaLinha.length > 0) score += pesos.matchLinha;
+            if (paxDaLinha.length > 0) {
+                score += pesos.matchLinha;
+                criterios.push({ label: `Linha ${omissao.linha_base} compatível (${paxDaLinha.length} pax)`, pts: pesos.matchLinha });
+            }
 
             // Omissão está entre duas viagens produtivas da mesma tabela
             const vizinhas = produtivas
@@ -81,7 +88,10 @@ const Anomalies = {
                 .sort((a, b) => a.mInicio - b.mInicio);
             const anterior = vizinhas.filter(v => v.mFim   <= mPlanejado).pop();
             const proxima  = vizinhas.find(v  => v.mInicio >= mPlanejado);
-            if (anterior && proxima) score += pesos.gapEntreViagens;
+            if (anterior && proxima) {
+                score += pesos.gapEntreViagens;
+                criterios.push({ label: `Entre viagens produtivas da tabela ${omissao.tabela} (${anterior.partidaReal || anterior.partidaPlanejada} → ${proxima.partidaReal || proxima.partidaPlanejada})`, pts: pesos.gapEntreViagens });
+            }
 
             // Densidade: % dos órfãos do veículo concentrada nesta janela
             if (veiculoInferido) {
@@ -89,7 +99,10 @@ const Anomalies = {
                 if (totalOrfaosVeiculo > 0) {
                     const paxDoCarro = paxNaJanela.filter(p => p.veiculo === veiculoInferido);
                     const perc = (paxDoCarro.length / totalOrfaosVeiculo) * 100;
-                    if (perc >= cfg.densidadePercentualMinimo) score += pesos.densidadeAlta;
+                    if (perc >= cfg.densidadePercentualMinimo) {
+                        score += pesos.densidadeAlta;
+                        criterios.push({ label: `${Math.round(perc)}% dos órfãos do veículo ${veiculoInferido} concentrados nesta janela`, pts: pesos.densidadeAlta });
+                    }
                 }
             }
 
@@ -98,7 +111,10 @@ const Anomalies = {
                 const delta = Math.abs(p.mHorario - mPlanejado);
                 return delta > (janela * 0.7); // últimos 30% da janela = "borda"
             });
-            if (paxNaBorda.length > 0) score += pesos.foraTolerancia;
+            if (paxNaBorda.length > 0) {
+                score += pesos.foraTolerancia;
+                criterios.push({ label: `${paxNaBorda.length} passageiro(s) detectados na borda da janela de auditoria`, pts: pesos.foraTolerancia });
+            }
 
             if (score < cfg.pontuacaoMinima) continue;
 
@@ -113,7 +129,8 @@ const Anomalies = {
                 paxNaJanela,
                 score,
                 nivel,
-                mPlanejado
+                mPlanejado,
+                criterios
             });
         }
 
@@ -243,11 +260,21 @@ const Anomalies = {
             const cor   = corNivel[s.nivel];
             const label = s.nivel.charAt(0).toUpperCase() + s.nivel.slice(1);
 
+            const badgesCriterios = s.criterios.map(c => `
+                <span style="display:inline-flex; align-items:center; gap:5px;
+                             background:var(--bg-4); border:1px solid var(--border);
+                             border-radius:4px; padding:3px 8px; font-size:0.76rem;
+                             color:var(--text-muted); white-space:nowrap;">
+                    ${c.label}
+                    <span style="font-weight:600; color:${cor};">+${c.pts}</span>
+                </span>
+            `).join("");
+
             return `
                 <div style="border:1px solid var(--border); border-radius:6px;
                             padding:14px; margin-bottom:12px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;
-                                margin-bottom:8px;">
+                                margin-bottom:6px;">
                         <strong>${s.omissao.linha} — ${s.omissao.partidaPlanejada}
                             às ${s.omissao.chegadaPlanejada}</strong>
                         <span style="color:${cor}; font-weight:bold; font-size:0.8rem;">
@@ -258,6 +285,9 @@ const Anomalies = {
                         Veículo inferido: <strong>${s.veiculoInferido || "não identificado"}</strong>
                         &nbsp;|&nbsp;
                         Passageiros na janela: <strong>${s.paxNaJanela.length}</strong>
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+                        ${badgesCriterios}
                     </div>
                     <button onclick="UIController.autoFillAudit('${s.veiculoInferido}', '${s.omissao.id}')"
                         class="btn btn-success">
