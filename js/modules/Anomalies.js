@@ -260,9 +260,7 @@ const Anomalies = {
                         Passageiros na janela: <strong>${s.paxNaJanela.length}</strong>
                     </div>
                     <button onclick="UIController.autoFillAudit('${s.veiculoInferido}', '${s.omissao.id}')"
-                        style="font-size:0.78rem; padding:4px 14px; cursor:pointer;
-                               background:var(--primary); color:white; border:none;
-                               border-radius:4px;">
+                        class="btn btn-success">
                         Investigar
                     </button>
                 </div>

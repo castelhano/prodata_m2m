@@ -153,6 +153,10 @@ const APP_CONFIG = {
             // Janela de busca em torno do horário planejado da omissão
             janelaAuditoriaMin: 25,
 
+            // Mínimo de passageiros órfãos na janela para considerar a omissão como candidata.
+            // Garante que casos sem nenhuma evidência de passageiro sejam descartados antes da pontuação.
+            minPassageirosSuspeitos: 2,
+
             // Pontuação mínima para reportar a omissão como suspeita
             pontuacaoMinima: 20,
 
