@@ -30,7 +30,10 @@ const Anomalies = {
 
         const cfg      = APP_CONFIG.anomalies.omissoesComPax;
         const pesos    = cfg.pesos;
-        const orphaos  = session.passageiros.filter(p => !p.assigned);
+        const conciliadas = new Set(session.empresasConciliadas || []);
+        const orphaos  = session.passageiros.filter(p =>
+            !p.assigned && (conciliadas.size === 0 || conciliadas.has(p.empresa))
+        );
 
         // Indexa órfãos por veículo para cálculo de densidade
         const orphaosPorVeiculo = {};
@@ -38,19 +41,17 @@ const Anomalies = {
             (orphaosPorVeiculo[p.veiculo] = orphaosPorVeiculo[p.veiculo] || []).push(p);
         }
 
-        // Indexa viagens produtivas por tabela para inferir veículo de omissões
-        const produtivas = session.viagens.filter(v => !v.isOmissao);
-        const veiculoPorTabela = {};
-        for (const v of produtivas) {
-            if (v.tabela && v.veiculo) veiculoPorTabela[v.tabela] = v.veiculo;
-        }
+        // Viagens produtivas no escopo — usadas para inferir veículo por proximidade
+        const produtivas = session.viagens.filter(v =>
+            !v.isOmissao && (conciliadas.size === 0 || conciliadas.has(v.empresa))
+        );
 
-        const omissoes = session.viagens.filter(v => v.isOmissao);
+        const omissoes = session.viagens.filter(v =>
+            v.isOmissao && (conciliadas.size === 0 || conciliadas.has(v.empresa))
+        );
         const suspeitos = [];
 
         for (const omissao of omissoes) {
-            const veiculoInferido = veiculoPorTabela[omissao.tabela] || null;
-
             // Passageiros na janela de auditoria ao redor do horário planejado
             const mPlanejado = this._toMin(omissao.partidaPlanejada);
             const janela     = cfg.janelaAuditoriaMin;
@@ -61,6 +62,17 @@ const Anomalies = {
             });
 
             if (paxNaJanela.length < cfg.minPassageirosSuspeitos) continue;
+
+            // Viagens vizinhas da mesma tabela — ordenadas por horário
+            const vizinhas = produtivas
+                .filter(v => v.tabela === omissao.tabela)
+                .sort((a, b) => a.mInicio - b.mInicio);
+            const anterior = vizinhas.filter(v => v.mFim   <= mPlanejado).pop();
+            const proxima  = vizinhas.find(v  => v.mInicio >= mPlanejado);
+
+            // Inferência de veículo: usa viagens VIZINHAS à omissão (por proximidade temporal),
+            // não um mapa global tabela→veículo que pode trazer veículos de outros turnos
+            const veiculoInferido = anterior?.veiculo || proxima?.veiculo || null;
 
             // --- Cálculo de pontuação ---
             let score = 0;
@@ -83,11 +95,6 @@ const Anomalies = {
             }
 
             // Omissão está entre duas viagens produtivas da mesma tabela
-            const vizinhas = produtivas
-                .filter(v => v.tabela === omissao.tabela)
-                .sort((a, b) => a.mInicio - b.mInicio);
-            const anterior = vizinhas.filter(v => v.mFim   <= mPlanejado).pop();
-            const proxima  = vizinhas.find(v  => v.mInicio >= mPlanejado);
             if (anterior && proxima) {
                 score += pesos.gapEntreViagens;
                 criterios.push({ label: `Entre viagens produtivas da tabela ${omissao.tabela} (${anterior.partidaReal || anterior.partidaPlanejada} → ${proxima.partidaReal || proxima.partidaPlanejada})`, pts: pesos.gapEntreViagens });
@@ -151,8 +158,10 @@ const Anomalies = {
         const session = AppState.session;
         if (!session) return alert("Nenhum dado processado.");
 
-        const editadasSemPax = session.viagens.filter(
-            v => v.isEditada && v.paxEfetivos.length === 0
+        const conciliadas = new Set(session.empresasConciliadas || []);
+        const editadasSemPax = session.viagens.filter(v =>
+            v.isEditada && v.paxEfetivos.length === 0 &&
+            (conciliadas.size === 0 || conciliadas.has(v.empresa))
         );
 
         if (editadasSemPax.length === 0) {
@@ -201,7 +210,11 @@ const Anomalies = {
         const session = AppState.session;
         if (!session) return alert("Nenhum dado processado.");
 
-        const omissoes = session.viagens.filter(v => v.isOmissao || v.convertidaDeOmissao);
+        const conciliadas = new Set(session.empresasConciliadas || []);
+        const omissoes = session.viagens.filter(v =>
+            (v.isOmissao || v.convertidaDeOmissao) &&
+            (conciliadas.size === 0 || conciliadas.has(v.empresa))
+        );
 
         if (omissoes.length === 0) {
             return UIController.showModal(

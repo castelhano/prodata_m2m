@@ -98,15 +98,15 @@ const APP_CONFIG = {
     // abbr: usado na nomenclatura dos arquivos exportados.
     // ----------------------------------------------------------
     empresas: {
-        rapido:      { id: 1, nome: "Rapido",        abbr: "RC",  nomeCompleto: "Rápido Cuiabá"                   },
-        vpar:        { id: 2, nome: "Vpar",          abbr: "VP",  nomeCompleto: "VPAR Transportes"                },
-        caribus:     { id: 3, nome: "Caribus",       abbr: "CB",  nomeCompleto: "Caribus Transportes"             },
-        cmt:         { id: 4, nome: "CMT",           abbr: "CM",  nomeCompleto: "CMT Urbano"                      },
-        consorcio:   { id: 5, nome: "Consorcio Met", abbr: "CO",  nomeCompleto: "Consórcio Metropolitano Transp"  },
-        integracao:  { id: 6, nome: "Integracao",    abbr: "IN",  nomeCompleto: "Integração Transportes"          },
-        termCuiaba:  { id: 7, nome: "Term Cuiaba",   abbr: "TC",  nomeCompleto: "MTU-Cuiabá"                      },
-        termVG:      { id: 8, nome: "Term VG",       abbr: "TV",  nomeCompleto: "MTU-Várzea Grande"               },
-        uniao:       { id: 9, nome: "Uniao",         abbr: "UN",  nomeCompleto: "União VZG Transportes"           }
+        rapido:      { id: 1, nome: "Rapido",        abbr: "RC", defCorte: true , defConciliacao: true ,  nomeCompleto: "Rápido Cuiabá"                   },
+        vpar:        { id: 2, nome: "Vpar",          abbr: "VP", defCorte: true , defConciliacao: true ,  nomeCompleto: "VPAR Transportes"                },
+        caribus:     { id: 3, nome: "Caribus",       abbr: "CB", defCorte: true , defConciliacao: false,  nomeCompleto: "Caribus Transportes"             },
+        cmt:         { id: 4, nome: "CMT",           abbr: "CM", defCorte: false, defConciliacao: false,  nomeCompleto: "CMT Urbano"                      },
+        consorcio:   { id: 5, nome: "Consorcio Met", abbr: "CO", defCorte: false, defConciliacao: false,  nomeCompleto: "Consórcio Metropolitano Transp"  },
+        integracao:  { id: 6, nome: "Integracao",    abbr: "IN", defCorte: true , defConciliacao: false,  nomeCompleto: "Integração Transportes"          },
+        termCuiaba:  { id: 7, nome: "Term Cuiaba",   abbr: "TC", defCorte: true , defConciliacao: false,  nomeCompleto: "MTU-Cuiabá"                      },
+        termVG:      { id: 8, nome: "Term VG",       abbr: "TV", defCorte: false, defConciliacao: false,  nomeCompleto: "MTU-Várzea Grande"               },
+        uniao:       { id: 9, nome: "Uniao",         abbr: "UN", defCorte: false, defConciliacao: false,  nomeCompleto: "União VZG Transportes"           }
     },
 
     // ----------------------------------------------------------
@@ -144,10 +144,12 @@ const APP_CONFIG = {
         // O Engine classifica cada passageiro não atribuído e gera sugestões.
         // Nenhuma atribuição automática — o usuário confirma antes de qualquer mudança.
 
-        // Limite de gap entre viagens do mesmo veículo:
-        // gap <= gapCurtoMax → passageiro no terminal → sugerir PRÓXIMA viagem
-        // gap >  gapCurtoMax → passageiro no entrepico → sugerir viagem ANTERIOR
-        gapCurtoMax: 20,   // minutos
+        // Limites de gap entre viagens do mesmo veículo:
+        // gap <= gapCurtoMax           → passageiro no terminal → sugerir PRÓXIMA viagem
+        // gapCurtoMax < gap <= gapLongoMax → passageiro no entrepico → sugerir viagem ANTERIOR
+        // gap > gapLongoMax            → gap excessivo → sem sugestão
+        gapCurtoMax:  15,  // minutos
+        gapLongoMax:  30,  // minutos — acima deste valor a confiança vai a zero
 
         // Pesos para cálculo de confiança das sugestões (soma define score 0–N)
         // Veículo pesa mais que linha: troca de carro é rara, linha errada é operacionalmente possível

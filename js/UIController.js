@@ -81,16 +81,26 @@ const UIController = {
         document.getElementById("selector-etapa-title").innerText = "Configurar operadoras";
         document.getElementById("painel-pax-corte").classList.remove("hidden");
 
-        const checkItem = (cls, val) =>
+        const empresasCfg = APP_CONFIG.empresas || {};
+
+        const checkItem = (cls, val, checked) =>
             `<label style="display:flex;gap:8px;cursor:pointer;align-items:center;">
-                <input type="checkbox" class="${cls}" value="${val}" checked> ${val}
+                <input type="checkbox" class="${cls}" value="${val}"${checked ? " checked" : ""}> ${val}
              </label>`;
 
         document.getElementById("checkboxes-pax").innerHTML =
-            empresasPax.map(e => checkItem("company-pax-select", e)).join("");
+            empresasPax.map(e => {
+                const cfg = Object.values(empresasCfg).find(c => c.nome === e);
+                const checked = cfg ? cfg.defCorte !== false : true;
+                return checkItem("company-pax-select", e, checked);
+            }).join("");
 
         document.getElementById("checkboxes-conciliacao").innerHTML =
-            empresasGps.map(e => checkItem("company-conc-select", e)).join("");
+            empresasGps.map(e => {
+                const cfg = Object.values(empresasCfg).find(c => c.nome === e);
+                const checked = cfg ? cfg.defConciliacao !== false : true;
+                return checkItem("company-conc-select", e, checked);
+            }).join("");
 
         section.classList.remove("hidden");
         lucide.createIcons();
@@ -125,10 +135,15 @@ const UIController = {
         document.getElementById("selector-etapa-title").innerText = "Selecionar empresas para conciliar";
         document.getElementById("painel-pax-corte").classList.add("hidden");
 
-        const checkItem = (val) =>
-            `<label style="display:flex;gap:8px;cursor:pointer;align-items:center;">
-                <input type="checkbox" class="company-conc-select" value="${val}" checked> ${val}
+        const empresasCfg = APP_CONFIG.empresas || {};
+
+        const checkItem = (val) => {
+            const cfg = Object.values(empresasCfg).find(c => c.nome === val);
+            const checked = cfg ? cfg.defConciliacao !== false : true;
+            return `<label style="display:flex;gap:8px;cursor:pointer;align-items:center;">
+                <input type="checkbox" class="company-conc-select" value="${val}"${checked ? " checked" : ""}> ${val}
              </label>`;
+        };
 
         document.getElementById("checkboxes-conciliacao").innerHTML =
             empresas.map(e => checkItem(e)).join("");

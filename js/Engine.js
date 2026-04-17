@@ -340,14 +340,20 @@ class Engine {
                             }
                         } else {
                             // Gap longo → entrepico → candidato é a viagem ANTERIOR
+                            // Usa a distância real do passageiro até o FIM de vAnt (não o gap entre trips)
                             if (vAnt) {
-                                confianca += pesos.matchVeiculo;
-                                confianca += p.linha === vAnt.linha_base ? pesos.matchLinha : 0;
-                                confianca += pesos.foraGapLongo;
-                                motivo = "gap_longo";
-                                const score = Math.min(confianca, 100);
-                                if (score >= confMin) {
-                                    sugestoes.push(this._buildSugestao(p, vAnt, motivo, score));
+                                const distancia = pMin - vAnt.mFim;
+                                if (distancia > 0 && distancia <= APP_CONFIG.engine.gapLongoMax) {
+                                    // foraGapLongo é progressivo: decai linearmente com a distância
+                                    const fator = 1 - distancia / APP_CONFIG.engine.gapLongoMax;
+                                    confianca += pesos.matchVeiculo;
+                                    confianca += p.linha === vAnt.linha_base ? pesos.matchLinha : 0;
+                                    confianca += Math.round(pesos.foraGapLongo * fator);
+                                    motivo = "gap_longo";
+                                    const score = Math.min(confianca, 100);
+                                    if (score >= confMin) {
+                                        sugestoes.push(this._buildSugestao(p, vAnt, motivo, score));
+                                    }
                                 }
                                 break;
                             }
@@ -561,10 +567,8 @@ class Engine {
         engine._etapaB(session);
         engine._etapaC(session);
 
-        // Acumula empresas conciliadas (preserva rodadas anteriores)
-        session.empresasConciliadas = [
-            ...new Set([...(session.empresasConciliadas || []), ...empresasConciliacao])
-        ];
+        // Define escopo atual — reflete exatamente o que o usuário selecionou nesta rodada
+        session.empresasConciliadas = [...empresasConciliacao];
 
         engine._calcularResumo(session);
 
