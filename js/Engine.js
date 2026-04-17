@@ -35,6 +35,12 @@ class Engine {
             this._etapaB(session);
             this._etapaC(session);
         }
+        // Registra quais empresas passaram pelo engine nesta execução
+        if (empresasConciliacao) {
+            session.empresasConciliadas = [...empresasConciliacao];
+        } else {
+            session.empresasConciliadas = [...new Set(session.viagens.map(v => v.empresa).filter(Boolean))];
+        }
         this._calcularResumo(session);
         return session;
     }
@@ -99,6 +105,9 @@ class Engine {
             // Flags de presença
             temGps:        viagens.length > 0,
             temBilhetagem: passageiros.length > 0,
+
+            // Empresas que já passaram pelo engine (define o escopo das exceções)
+            empresasConciliadas: [],
 
             // Resultado da conciliação — populado pelas etapas
             resumo: null,
@@ -384,16 +393,21 @@ class Engine {
     _calcularResumo(session) {
         const { viagens, passageiros, paxIgnorados, sugestoes } = session;
 
-        const ignoradosIds   = new Set(paxIgnorados.map(p => p.id));
-        const totalPax       = passageiros.length;
-        const atribuidos     = passageiros.filter(p => p.assigned).length;
-        const naoAtribuidos  = passageiros.filter(p => !p.assigned && !ignoradosIds.has(p.id)).length;
-        const ignorados      = paxIgnorados.length;
+        // Restringe ao escopo das empresas conciliadas
+        const conciliadas  = new Set(session.empresasConciliadas || []);
+        const paxScope     = conciliadas.size > 0 ? passageiros.filter(p => conciliadas.has(p.empresa)) : passageiros;
+        const viagensScope = conciliadas.size > 0 ? viagens.filter(v => conciliadas.has(v.empresa))     : viagens;
 
-        const totalViagens   = viagens.length;
-        const omissoes       = viagens.filter(v => v.isOmissao).length;
-        const extras         = viagens.filter(v => v.isExtra).length;
-        const editadas       = viagens.filter(v => v.isEditada).length;
+        const ignoradosIds  = new Set(paxIgnorados.map(p => p.id));
+        const totalPax      = paxScope.length;
+        const atribuidos    = paxScope.filter(p => p.assigned).length;
+        const naoAtribuidos = paxScope.filter(p => !p.assigned && !ignoradosIds.has(p.id)).length;
+        const ignorados     = paxScope.filter(p => ignoradosIds.has(p.id)).length;
+
+        const totalViagens  = viagensScope.length;
+        const omissoes      = viagensScope.filter(v => v.isOmissao).length;
+        const extras        = viagensScope.filter(v => v.isExtra).length;
+        const editadas      = viagensScope.filter(v => v.isEditada).length;
 
         const sugeridosC     = sugestoes.length;
         const autoSelecionaveis = sugestoes.filter(
@@ -522,6 +536,11 @@ class Engine {
         const empresasSet = new Set(empresasConciliacao);
         const engine = new Engine();
 
+        // Re-aplica normalizações do settings atual sobre os dados do session
+        // Seguro: valores canônicos não são chaves no mapeamento, então é idempotente.
+        // Permite que mapeamentos adicionados após a última rodada sejam aproveitados.
+        Engine.reNormalizarSession(session);
+
         // Remove sugestões pendentes das empresas selecionadas — serão regeneradas
         session.sugestoes = (session.sugestoes || []).filter(s => {
             const pax = session.passageiros.find(p => p.id === s.paxId);
@@ -541,9 +560,55 @@ class Engine {
         engine._etapaA(session);
         engine._etapaB(session);
         engine._etapaC(session);
+
+        // Acumula empresas conciliadas (preserva rodadas anteriores)
+        session.empresasConciliadas = [
+            ...new Set([...(session.empresasConciliadas || []), ...empresasConciliacao])
+        ];
+
         engine._calcularResumo(session);
 
         return session;
+    }
+
+
+    // ==========================================================
+    // RE-NORMALIZAÇÃO DE SESSION EXISTENTE
+    // Re-aplica os mapeamentos do settings atual sobre viagens e
+    // passageiros já no session. Útil quando normalizacao.linha ou
+    // normalizacao.empresa é atualizado após a primeira rodada.
+    // ==========================================================
+
+    static reNormalizarSession(session) {
+        const cfgGps = APP_CONFIG.fontes.gps.normalizacao;
+        const cfgPax = APP_CONFIG.fontes.bilhetagem.normalizacao;
+
+        const aplicar = (valor, mapa) => mapa?.[valor] || valor;
+
+        const derivarLinha = (obj, novaLinha) => {
+            obj.linha = novaLinha;
+            if (novaLinha.includes(' - ')) {
+                const [base, sentido] = novaLinha.split(' - ');
+                obj.linha_base = base.trim();
+                obj.sentido    = sentido.trim().toUpperCase();
+            } else {
+                obj.linha_base = novaLinha;
+            }
+        };
+
+        for (const v of session.viagens) {
+            v.empresa = aplicar(v.empresa, cfgGps.empresa);
+            v.veiculo = aplicar(v.veiculo, cfgGps.veiculo);
+            const linhaNorm = aplicar(v.linha, cfgGps.linha);
+            if (linhaNorm !== v.linha) derivarLinha(v, linhaNorm);
+        }
+
+        for (const p of session.passageiros) {
+            p.empresa = aplicar(p.empresa, cfgPax.empresa);
+            p.veiculo = aplicar(p.veiculo, cfgPax.veiculo);
+            const linhaNorm = aplicar(p.linha, cfgPax.linha);
+            if (linhaNorm !== p.linha) derivarLinha(p, linhaNorm);
+        }
     }
 
 

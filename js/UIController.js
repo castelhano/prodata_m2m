@@ -172,8 +172,11 @@ const UIController = {
         // Popula filtro de empresas
         this._popularFiltroEmpresas(session);
 
-        // Renderiza tabelas
-        this.renderExcecoes(session.passageiros.filter(p => !p.assigned));
+        // Renderiza tabelas — exceções apenas de empresas já conciliadas
+        const conciliadas = new Set(session.empresasConciliadas || []);
+        this.renderExcecoes(session.passageiros.filter(p =>
+            !p.assigned && (conciliadas.size === 0 || conciliadas.has(p.empresa))
+        ));
         this.renderSugestoes(session.sugestoes);
         this.atualizarSeletorViagens();
 
@@ -438,7 +441,10 @@ const UIController = {
         const mIni = toMin(fIni);
         const mFim = toMin(fFim);
 
-        const orphaos = AppState.session.passageiros.filter(p => !p.assigned);
+        const conciliadas = new Set(AppState.session.empresasConciliadas || []);
+        const orphaos = AppState.session.passageiros.filter(p =>
+            !p.assigned && (conciliadas.size === 0 || conciliadas.has(p.empresa))
+        );
 
         const filtrados = orphaos.filter(p => {
             if (fEmp   && p.empresa !== fEmp)                          return false;
@@ -463,9 +469,10 @@ const UIController = {
         });
 
         if (AppState.session) {
-            this.renderExcecoes(
-                AppState.session.passageiros.filter(p => !p.assigned)
-            );
+            const conciliadas = new Set(AppState.session.empresasConciliadas || []);
+            this.renderExcecoes(AppState.session.passageiros.filter(p =>
+                !p.assigned && (conciliadas.size === 0 || conciliadas.has(p.empresa))
+            ));
         }
 
         this.resetSelectAll();
@@ -581,10 +588,12 @@ const UIController = {
     // ==========================================================
 
     _popularFiltroEmpresas(session) {
-        const select   = document.getElementById("filter-empresa");
-        // Usa os passageiros não-atribuídos como fonte — reflete exatamente o que a tabela mostra
-        const empresas = [...new Set(
-            session.passageiros.filter(p => !p.assigned).map(p => p.empresa).filter(Boolean)
+        const select      = document.getElementById("filter-empresa");
+        const conciliadas = new Set(session.empresasConciliadas || []);
+        const empresas    = [...new Set(
+            session.passageiros
+                .filter(p => !p.assigned && (conciliadas.size === 0 || conciliadas.has(p.empresa)))
+                .map(p => p.empresa).filter(Boolean)
         )].sort();
         select.innerHTML = "<option value=''>Empresa (Todas)</option>"
             + empresas.map(e => `<option value="${e}">${e}</option>`).join("");
