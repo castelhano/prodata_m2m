@@ -250,6 +250,50 @@ body {
     animation: fadeSlide .3s ease;
 }
 
+.selector-paineis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+/* Quando o painel de corte está oculto, o de conciliação ocupa a linha toda */
+#painel-pax-corte.hidden ~ .selector-painel {
+    grid-column: 1 / -1;
+}
+
+.selector-painel {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.selector-painel-titulo {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.selector-painel-desc {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin: 0 0 12px;
+    line-height: 1.5;
+}
+
+.selector-checkboxes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
 #company-checkboxes {
     display: flex;
     flex-wrap: wrap;
@@ -811,17 +855,39 @@ input[type="checkbox"]:checked::after {
 
 
     <!-- ========================================================
-         SELETOR DE EMPRESAS (aparece após GPS carregado)
+         SELETOR DE EMPRESAS (aparece após GPS carregado ou ao importar)
     ======================================================== -->
     <section id="company-selector-section" class="card hidden">
-        <div class="etapa-label" style="margin-bottom:12px;">
-            <span class="etapa-num">ETAPA 01</span>
-            <span class="etapa-title">Filtrar operadoras</span>
+        <div class="etapa-label" style="margin-bottom:16px;">
+            <span class="etapa-num" id="selector-etapa-num">ETAPA 01</span>
+            <span class="etapa-title" id="selector-etapa-title">Configurar operadoras</span>
             <div class="etapa-sep"></div>
         </div>
-        <div id="company-checkboxes"></div>
-        <button id="btn-iniciar-processamento" class="btn btn-primary">
-            <i data-lucide="zap"></i> Sincronizar selecionadas
+
+        <div class="selector-paineis">
+            <!-- Painel 1: Passageiros a considerar (oculto no modo import) -->
+            <div id="painel-pax-corte" class="selector-painel">
+                <div class="selector-painel-titulo">
+                    <i data-lucide="users" style="width:13px;height:13px;"></i>
+                    Passageiros a considerar
+                </div>
+                <p class="selector-painel-desc">Desmarcadas são descartadas — não constarão no exportado.</p>
+                <div id="checkboxes-pax" class="selector-checkboxes"></div>
+            </div>
+
+            <!-- Painel 2: Empresas para conciliação -->
+            <div class="selector-painel">
+                <div class="selector-painel-titulo">
+                    <i data-lucide="git-merge" style="width:13px;height:13px;"></i>
+                    Empresas para conciliação
+                </div>
+                <p class="selector-painel-desc">Marcadas entram nas etapas A/B/C. As demais ficam no exportado como não conciliadas.</p>
+                <div id="checkboxes-conciliacao" class="selector-checkboxes"></div>
+            </div>
+        </div>
+
+        <button id="btn-conciliar" class="btn btn-primary">
+            <i data-lucide="zap"></i> Conciliar
         </button>
     </section>
 

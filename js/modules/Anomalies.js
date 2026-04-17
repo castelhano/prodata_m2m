@@ -261,10 +261,10 @@ const Anomalies = {
             const label = s.nivel.charAt(0).toUpperCase() + s.nivel.slice(1);
 
             const badgesCriterios = s.criterios.map(c => `
-                <span style="display:inline-flex; align-items:center; gap:5px;
+                <span style="display:inline-flex; align-items:center; justify-content: space-between; gap:5px;
                              background:var(--bg-4); border:1px solid var(--border);
                              border-radius:4px; padding:3px 8px; font-size:0.76rem;
-                             color:var(--text-muted); white-space:nowrap;">
+                             color:var(--text-muted); white-space:nowrap;width: 100%;">
                     ${c.label}
                     <span style="font-weight:600; color:${cor};">+${c.pts}</span>
                 </span>

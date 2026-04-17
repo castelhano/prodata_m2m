@@ -88,7 +88,25 @@ const APP_CONFIG = {
     },
 
     // ----------------------------------------------------------
-    // 2. ENGINE — Regras de conciliação
+    // 2. EMPRESAS — Cadastro canônico de operadoras
+    // A chave é o slug da empresa (imutável).
+    // nome: valor canônico produzido pela normalizacao acima.
+    // abbr: usado na nomenclatura dos arquivos exportados.
+    // ----------------------------------------------------------
+    empresas: {
+        rapido:      { id: 1, nome: "Rapido",        abbr: "RC",  nomeCompleto: "Rápido Cuiabá"                   },
+        vpar:        { id: 2, nome: "Vpar",          abbr: "VP",  nomeCompleto: "VPAR Transportes"                },
+        caribus:     { id: 3, nome: "Caribus",       abbr: "CB",  nomeCompleto: "Caribus Transportes"             },
+        cmt:         { id: 4, nome: "CMT",           abbr: "CM",  nomeCompleto: "CMT Urbano"                      },
+        consorcio:   { id: 5, nome: "Consorcio Met", abbr: "CO",  nomeCompleto: "Consórcio Metropolitano Transp"  },
+        integracao:  { id: 6, nome: "Integracao",    abbr: "IN",  nomeCompleto: "Integração Transportes"          },
+        termCuiaba:  { id: 7, nome: "Term Cuiaba",   abbr: "TC",  nomeCompleto: "MTU-Cuiabá"                      },
+        termVG:      { id: 8, nome: "Term VG",       abbr: "TV",  nomeCompleto: "MTU-Várzea Grande"               },
+        uniao:       { id: 9, nome: "Uniao",         abbr: "UN",  nomeCompleto: "União VZG Transportes"           }
+    },
+
+    // ----------------------------------------------------------
+    // 3. ENGINE — Regras de conciliação
     // ----------------------------------------------------------
     engine: {
 
@@ -142,7 +160,7 @@ const APP_CONFIG = {
     },
 
     // ----------------------------------------------------------
-    // 3. ANOMALIES — Parâmetros por módulo de análise
+    // 4. ANOMALIES — Parâmetros por módulo de análise
     // Cada chave corresponde a um arquivo em js/modules/
     // ----------------------------------------------------------
     anomalies: {
@@ -192,7 +210,7 @@ const APP_CONFIG = {
     },
 
     // ----------------------------------------------------------
-    // 4. UI — Comportamento de apresentação
+    // 5. UI — Comportamento de apresentação
     // ----------------------------------------------------------
     ui: {
         excecoesPorPagina: 100,

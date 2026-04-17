@@ -68,21 +68,27 @@ async function handleFileSelect(tipo, file) {
 function detectarEmpresas() {
     if (!AppState.rawGps) return;
 
-    const norm     = new DataNormalizer(APP_CONFIG.fontes.gps);
-    const empresas = [
-        ...new Set(AppState.rawGps.map(row => norm.normalize(row).empresa).filter(Boolean))
-    ];
+    const normGps = new DataNormalizer(APP_CONFIG.fontes.gps);
+    const normPax = new DataNormalizer(APP_CONFIG.fontes.bilhetagem);
 
-    UIController.showSeletorEmpresas(empresas, (selecionadas) => {
-        executarProcessamento(selecionadas);
-    });
+    const empresasGps = [
+        ...new Set(AppState.rawGps.map(r => normGps.normalize(r).empresa).filter(Boolean))
+    ].sort();
+
+    const empresasPax = AppState.rawPax
+        ? [...new Set(AppState.rawPax.map(r => normPax.normalize(r).empresa).filter(Boolean))].sort()
+        : [...empresasGps];
+
+    UIController.showSeletorEmpresas({ empresasPax, empresasGps, onConciliar: executarProcessamento });
 }
 
 
 // ----------------------------------------------------------
-// Execução do processamento principal
+// Execução do processamento principal (primeiro carregamento)
+// empresasPax   — passageiros a incluir (painel 1)
+// empresasConciliacao — empresas a conciliar agora (painel 2)
 // ----------------------------------------------------------
-function executarProcessamento(empresasFiltro) {
+function executarProcessamento({ empresasPax, empresasConciliacao }) {
     UIController.showLoader("Processando...");
 
     // setTimeout garante que o loader renderiza antes do processamento bloquear a thread
@@ -91,18 +97,19 @@ function executarProcessamento(empresasFiltro) {
             const normGps = new DataNormalizer(APP_CONFIG.fontes.gps);
             const normPax = new DataNormalizer(APP_CONFIG.fontes.bilhetagem);
 
+            // GPS e pax carregados para todas as empresas do painel 1
             const gpsLimpo = AppState.rawGps
                 .map(r => normGps.normalize(r))
-                .filter(r => empresasFiltro.includes(r.empresa));
+                .filter(r => empresasPax.includes(r.empresa));
 
             const paxLimpo = AppState.rawPax
                 ? AppState.rawPax
                     .map(r => normPax.normalize(r))
-                    .filter(r => empresasFiltro.includes(r.empresa))
+                    .filter(r => empresasPax.includes(r.empresa))
                 : [];
 
-            const engine        = new Engine(gpsLimpo, paxLimpo);
-            AppState.session    = engine.process();
+            const engine     = new Engine(gpsLimpo, paxLimpo);
+            AppState.session = engine.process(empresasConciliacao);
 
             UIController.updateDashboard(AppState.session);
             UIController.hideLoader();
@@ -112,6 +119,36 @@ function executarProcessamento(empresasFiltro) {
             alert(`Erro no processamento: ${err.message}`);
             console.error(err);
         }
+    }, 80);
+}
+
+
+// ----------------------------------------------------------
+// Exibe seletor de conciliação após importar trabalho salvo
+// ----------------------------------------------------------
+function iniciarSeletorConciliacaoPostImport(session) {
+    const empresas = [...new Set(session.viagens.map(v => v.empresa).filter(Boolean))].sort();
+    UIController.showSeletorConciliacao(empresas, conciliarSobreSession);
+}
+
+
+// ----------------------------------------------------------
+// Conciliação incremental sobre session já existente
+// Preserva tudo já conciliado — processa só os pax não-atribuídos
+// das empresas selecionadas
+// ----------------------------------------------------------
+function conciliarSobreSession(empresasConciliacao) {
+    UIController.showLoader("Conciliando...");
+    setTimeout(() => {
+        try {
+            AppState.session = Engine.conciliarIncremental(AppState.session, empresasConciliacao);
+            UIController.updateDashboard(AppState.session);
+            UIController.setStatusBadge("Conciliação atualizada", "success");
+        } catch (err) {
+            alert(`Erro na conciliação: ${err.message}`);
+            console.error(err);
+        }
+        UIController.hideLoader();
     }, 80);
 }
 

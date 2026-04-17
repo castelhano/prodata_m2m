@@ -73,31 +73,79 @@ const UIController = {
     // SELETOR DE EMPRESAS
     // ==========================================================
 
-    showSeletorEmpresas(empresas, onConfirmar) {
-        // const section   = document.getElementById("company-selector-section");
-        const section   = document.getElementById("company-selector-section");
-        const container = document.getElementById("company-checkboxes");
+    // Modo primeiro carregamento: dois paineis (pax + conciliação)
+    showSeletorEmpresas({ empresasPax, empresasGps, onConciliar }) {
+        const section = document.getElementById("company-selector-section");
 
-        container.innerHTML = empresas.map(emp => `
-            <label style="display:flex; gap:8px; cursor:pointer; align-items:center;">
-                <input type="checkbox" class="company-select" value="${emp}" checked>
-                ${emp}
-            </label>
-        `).join("");
+        document.getElementById("selector-etapa-num").innerText   = "ETAPA 01";
+        document.getElementById("selector-etapa-title").innerText = "Configurar operadoras";
+        document.getElementById("painel-pax-corte").classList.remove("hidden");
+
+        const checkItem = (cls, val) =>
+            `<label style="display:flex;gap:8px;cursor:pointer;align-items:center;">
+                <input type="checkbox" class="${cls}" value="${val}" checked> ${val}
+             </label>`;
+
+        document.getElementById("checkboxes-pax").innerHTML =
+            empresasPax.map(e => checkItem("company-pax-select", e)).join("");
+
+        document.getElementById("checkboxes-conciliacao").innerHTML =
+            empresasGps.map(e => checkItem("company-conc-select", e)).join("");
 
         section.classList.remove("hidden");
+        lucide.createIcons();
 
-        document.getElementById("btn-iniciar-processamento").onclick = () => {
-            const selecionadas = Array.from(
-                document.querySelectorAll(".company-select:checked")
+        document.getElementById("btn-conciliar").onclick = () => {
+            const empresasPaxSel = Array.from(
+                document.querySelectorAll(".company-pax-select:checked")
             ).map(cb => cb.value);
 
-            if (selecionadas.length === 0) {
-                return alert("Selecione ao menos uma empresa.");
-            }
+            const empresasConcSel = Array.from(
+                document.querySelectorAll(".company-conc-select:checked")
+            ).map(cb => cb.value);
 
-            section.classList.add("hidden");
-            onConfirmar(selecionadas);
+            if (empresasPaxSel.length === 0)
+                return alert("Selecione ao menos uma empresa no bloco de passageiros.");
+            if (empresasConcSel.length === 0)
+                return alert("Selecione ao menos uma empresa para conciliar.");
+
+            // Esconde só o painel de corte — painel de conciliação fica visível
+            document.getElementById("painel-pax-corte").classList.add("hidden");
+            document.getElementById("selector-etapa-num").innerText   = "CONCILIAÇÃO";
+            document.getElementById("selector-etapa-title").innerText = "Selecionar empresas para conciliar";
+            onConciliar({ empresasPax: empresasPaxSel, empresasConciliacao: empresasConcSel });
+        };
+    },
+
+    // Modo pós-import: apenas painel de conciliação
+    showSeletorConciliacao(empresas, onConciliar) {
+        const section = document.getElementById("company-selector-section");
+
+        document.getElementById("selector-etapa-num").innerText   = "CONCILIAÇÃO";
+        document.getElementById("selector-etapa-title").innerText = "Selecionar empresas para conciliar";
+        document.getElementById("painel-pax-corte").classList.add("hidden");
+
+        const checkItem = (val) =>
+            `<label style="display:flex;gap:8px;cursor:pointer;align-items:center;">
+                <input type="checkbox" class="company-conc-select" value="${val}" checked> ${val}
+             </label>`;
+
+        document.getElementById("checkboxes-conciliacao").innerHTML =
+            empresas.map(e => checkItem(e)).join("");
+
+        section.classList.remove("hidden");
+        lucide.createIcons();
+
+        document.getElementById("btn-conciliar").onclick = () => {
+            const selecionadas = Array.from(
+                document.querySelectorAll(".company-conc-select:checked")
+            ).map(cb => cb.value);
+
+            if (selecionadas.length === 0)
+                return alert("Selecione ao menos uma empresa para conciliar.");
+
+            // Seção permanece visível para permitir novas conciliações
+            onConciliar(selecionadas);
         };
     },
 

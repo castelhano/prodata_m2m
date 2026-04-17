@@ -28,8 +28,8 @@ class Engine {
     // PONTO DE ENTRADA PÚBLICO
     // Retorna o Session completo após todas as etapas
     // ----------------------------------------------------------
-    process() {
-        const session = this._buildSession();
+    process(empresasConciliacao = null) {
+        const session = this._buildSession(empresasConciliacao);
         if (session.temGps && session.temBilhetagem) {
             this._etapaA(session);
             this._etapaB(session);
@@ -44,7 +44,7 @@ class Engine {
     // CONSTRUÇÃO DO SESSION
     // ==========================================================
 
-    _buildSession() {
+    _buildSession(empresasConciliacao = null) {
         const cfg = APP_CONFIG;
 
         // --- Viagens (GPS) ---
@@ -72,9 +72,14 @@ class Engine {
         );
 
         // --- Índices para performance ---
-        // Agrupa viagens e passageiros por veículo para acesso O(1) durante conciliação
-        const viagensPorVeiculo  = this._groupBy(viagens,         'veiculo');
-        const paxPorVeiculo      = this._groupBy(paxConciliaveis, 'veiculo');
+        // paxPorVeiculo considera apenas as empresas selecionadas para conciliação
+        const empresasSet       = empresasConciliacao ? new Set(empresasConciliacao) : null;
+        const paxParaConciliar  = empresasSet
+            ? paxConciliaveis.filter(p => empresasSet.has(p.empresa))
+            : paxConciliaveis;
+
+        const viagensPorVeiculo  = this._groupBy(viagens,          'veiculo');
+        const paxPorVeiculo      = this._groupBy(paxParaConciliar,  'veiculo');
 
         // Agrupa viagens por tabela para uso no Anomalies (identificar carro de omissões)
         const viagensPorTabela   = this._groupBy(viagens, 'tabela');
@@ -85,7 +90,10 @@ class Engine {
             passageiros,          // todos — incluindo ignorados e não conciliáveis
             paxIgnorados,         // linhas sem correspondência no GPS (preservados para outros usos)
 
-            // Índices internos (usados pelo Engine e módulos)
+            // Data de operação extraída do primeiro registro GPS (formato bruto do arquivo)
+            dataOperacao: this._rawGps[0]?.data || "",
+
+            // Índices internos (usados pelo Engine e módulos — não exportados)
             _idx: { viagensPorVeiculo, paxPorVeiculo, viagensPorTabela },
 
             // Flags de presença
@@ -349,10 +357,9 @@ class Engine {
             }
         }
 
-        // Ordena sugestões: maior confiança primeiro, depois por horário do passageiro
-        sugestoes.sort((a, b) => b.confianca - a.confianca || a.pax.mHorario - b.pax.mHorario);
-
-        session.sugestoes = sugestoes;
+        // Acumula (modo incremental preserva sugestões de outras empresas já processadas)
+        session.sugestoes = [...(session.sugestoes || []), ...sugestoes];
+        session.sugestoes.sort((a, b) => b.confianca - a.confianca || a.mHorario - b.mHorario);
     }
 
     _buildSugestao(pax, viagem, motivo, confianca) {
@@ -362,8 +369,9 @@ class Engine {
             motivo,     // "gap_curto" | "gap_longo" | "linha_divergente"
             confianca,  // 0–100
             confirmada: false,
-            pax,        // referência — facilita renderização sem re-busca
-            viagem      // referência
+            mHorario:   pax.mHorario,  // para ordenação (não requer ref ao objeto)
+            pax,        // referência — facilita renderização sem re-busca (stripped on export)
+            viagem      // referência (stripped on export)
         };
     }
 
@@ -376,9 +384,10 @@ class Engine {
     _calcularResumo(session) {
         const { viagens, passageiros, paxIgnorados, sugestoes } = session;
 
+        const ignoradosIds   = new Set(paxIgnorados.map(p => p.id));
         const totalPax       = passageiros.length;
         const atribuidos     = passageiros.filter(p => p.assigned).length;
-        const naoAtribuidos  = passageiros.filter(p => !p.assigned && !paxIgnorados.includes(p)).length;
+        const naoAtribuidos  = passageiros.filter(p => !p.assigned && !ignoradosIds.has(p.id)).length;
         const ignorados      = paxIgnorados.length;
 
         const totalViagens   = viagens.length;
@@ -430,7 +439,7 @@ class Engine {
             pax.assigned         = true;
             pax.tripId           = viagem.id;
             pax.atribuicaoMetodo = "etapa_c";
-            viagem.paxEfetivos.push(pax);
+            viagem.paxEfetivos.push(pax.id);
 
             // Se a viagem era omissão, converte para produtiva
             if (viagem.isOmissao) {
@@ -472,14 +481,14 @@ class Engine {
             if (pax.assigned && pax.tripId) {
                 const anterior = session.viagens.find(v => v.id === pax.tripId);
                 if (anterior) {
-                    anterior.paxEfetivos = anterior.paxEfetivos.filter(p => p.id !== pax.id);
+                    anterior.paxEfetivos = anterior.paxEfetivos.filter(id => id !== pax.id);
                 }
             }
 
             pax.assigned         = true;
             pax.tripId           = viagem.id;
             pax.atribuicaoMetodo = "manual";
-            viagem.paxEfetivos.push(pax);
+            viagem.paxEfetivos.push(pax.id);
 
             // Converte omissão se necessário
             if (viagem.isOmissao) {
@@ -504,6 +513,41 @@ class Engine {
 
 
     // ==========================================================
+    // CONCILIAÇÃO INCREMENTAL (pós-import)
+    // Processa apenas empresas selecionadas, preservando tudo
+    // que já foi conciliado nas demais.
+    // ==========================================================
+
+    static conciliarIncremental(session, empresasConciliacao) {
+        const empresasSet = new Set(empresasConciliacao);
+        const engine = new Engine();
+
+        // Remove sugestões pendentes das empresas selecionadas — serão regeneradas
+        session.sugestoes = (session.sugestoes || []).filter(s => {
+            const pax = session.passageiros.find(p => p.id === s.paxId);
+            return !pax || !empresasSet.has(pax.empresa);
+        });
+
+        // Reconstrói _idx: todas as viagens (contexto completo), pax filtrado
+        const paxParaConciliar = session.passageiros.filter(
+            p => !p.assigned && empresasSet.has(p.empresa)
+        );
+        session._idx = {
+            viagensPorVeiculo: engine._groupBy(session.viagens,       'veiculo'),
+            paxPorVeiculo:     engine._groupBy(paxParaConciliar,      'veiculo'),
+            viagensPorTabela:  engine._groupBy(session.viagens,       'tabela')
+        };
+
+        engine._etapaA(session);
+        engine._etapaB(session);
+        engine._etapaC(session);
+        engine._calcularResumo(session);
+
+        return session;
+    }
+
+
+    // ==========================================================
     // AUXILIARES INTERNOS
     // ==========================================================
 
@@ -516,12 +560,13 @@ class Engine {
     }
 
     // Atribui passageiro a viagem e registra metadados
+    // paxEfetivos guarda apenas o ID — objeto completo vive em session.passageiros
     _atribuir(pax, viagem, metodo, delta = null) {
-        pax.assigned        = true;
-        pax.tripId          = viagem.id;
+        pax.assigned         = true;
+        pax.tripId           = viagem.id;
         pax.atribuicaoMetodo = metodo;
-        pax.deltaMinutos    = delta !== null ? Math.round(delta) : null;
-        viagem.paxEfetivos.push(pax);
+        pax.deltaMinutos     = delta !== null ? Math.round(delta) : null;
+        viagem.paxEfetivos.push(pax.id);
     }
 
     // Ajusta minutos do passageiro para comparação com viagem de pernoite
