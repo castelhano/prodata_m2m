@@ -236,11 +236,18 @@ const UIController = {
 
         section.classList.remove("hidden");
 
-        // Limpa filtros ao re-renderizar a lista completa
+        // Popula e limpa filtros ao re-renderizar a lista completa
         ["sug-filter-veiculo", "sug-filter-linha"].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = "";
         });
+
+        const empresasSel = document.getElementById("sug-filter-empresa");
+        if (empresasSel) {
+            const empresas = [...new Set(sugestoes.map(s => s.pax?.empresa).filter(Boolean))].sort();
+            empresasSel.innerHTML = "<option value=''>Empresa (Todas)</option>"
+                + empresas.map(e => `<option value="${e}">${e}</option>`).join("");
+        }
 
         document.getElementById("stat-sugestoes").innerText = sugestoes.length;
         const badge = document.getElementById("badge-sugestoes");
@@ -306,12 +313,14 @@ const UIController = {
     aplicarFiltrosSugestoes() {
         if (!AppState.session) return;
 
+        const fEmp   = document.getElementById("sug-filter-empresa")?.value || "";
         const fVeic  = document.getElementById("sug-filter-veiculo")?.value.trim() || "";
         const fLinha = document.getElementById("sug-filter-linha")?.value.trim().toLowerCase() || "";
 
         const filtradas = AppState.session.sugestoes.filter(s => {
-            if (fVeic  && !String(s.pax.veiculo).includes(fVeic))      return false;
-            if (fLinha && !s.pax.linha.toLowerCase().includes(fLinha))  return false;
+            if (fEmp   && s.pax?.empresa !== fEmp)                        return false;
+            if (fVeic  && !String(s.pax?.veiculo).includes(fVeic))        return false;
+            if (fLinha && !s.pax?.linha.toLowerCase().includes(fLinha))   return false;
             return true;
         });
 
@@ -319,7 +328,7 @@ const UIController = {
     },
 
     limparFiltrosSugestoes() {
-        ["sug-filter-veiculo", "sug-filter-linha"].forEach(id => {
+        ["sug-filter-empresa", "sug-filter-veiculo", "sug-filter-linha"].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = "";
         });
@@ -573,7 +582,10 @@ const UIController = {
 
     _popularFiltroEmpresas(session) {
         const select   = document.getElementById("filter-empresa");
-        const empresas = [...new Set(session.viagens.map(v => v.empresa).filter(Boolean))];
+        // Usa os passageiros não-atribuídos como fonte — reflete exatamente o que a tabela mostra
+        const empresas = [...new Set(
+            session.passageiros.filter(p => !p.assigned).map(p => p.empresa).filter(Boolean)
+        )].sort();
         select.innerHTML = "<option value=''>Empresa (Todas)</option>"
             + empresas.map(e => `<option value="${e}">${e}</option>`).join("");
     },

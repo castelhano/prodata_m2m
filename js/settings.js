@@ -71,7 +71,11 @@ const APP_CONFIG = {
                     // Bilhetagem usa código numérico, GPS usa alfanumérico
                     // Ambos convergem para o valor canônico (padrão GPS)
                     "902":  "A02",
+                    "906":  "A06",
+                    "908":  "A08",
+                    "910":  "A10",
                     "914":  "A14",
+                    "915":  "A15",
                     "922":  "A22",
                     "922B":  "A22B",
                 },
@@ -143,7 +147,7 @@ const APP_CONFIG = {
         // Limite de gap entre viagens do mesmo veículo:
         // gap <= gapCurtoMax → passageiro no terminal → sugerir PRÓXIMA viagem
         // gap >  gapCurtoMax → passageiro no entrepico → sugerir viagem ANTERIOR
-        gapCurtoMax: 40,   // minutos
+        gapCurtoMax: 20,   // minutos
 
         // Pesos para cálculo de confiança das sugestões (soma define score 0–N)
         // Veículo pesa mais que linha: troca de carro é rara, linha errada é operacionalmente possível
