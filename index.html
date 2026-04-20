@@ -560,6 +560,9 @@ tbody td.td-main    { color: var(--text); font-weight: 500; }
 .filter-group input  { min-width: 100px; }
 .filter-group input[type="time"] { min-width: 90px; }
 
+/* Colunas de detalhamento de score — visíveis apenas no CSV */
+.score-detail { display: none; }
+
 /* Atribuição manual */
 .assign-bar {
     background: var(--bg-3);
@@ -1003,6 +1006,12 @@ input[type="checkbox"]:checked::after {
                         <th>Motivo</th>
                         <th>Confiança</th>
                         <th>Viagem sugerida</th>
+                        <th class="score-detail">Pts V</th>
+                        <th class="score-detail">Pts L</th>
+                        <th class="score-detail">Pts S</th>
+                        <th class="score-detail">Pts GC</th>
+                        <th class="score-detail">Pts GL</th>
+                        <th class="score-detail">Raw</th>
                     </tr>
                 </thead>
                 <tbody id="table-suggestions-body"></tbody>

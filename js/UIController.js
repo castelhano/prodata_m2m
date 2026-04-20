@@ -294,9 +294,10 @@ const UIController = {
         const tbody   = document.getElementById("table-suggestions-body");
 
         const motivoLabel = {
-            gap_curto:       "Terminal (gap curto)",
-            gap_longo:       "Entrepico (gap longo)",
-            linha_divergente:"Linha divergente"
+            gap_curto:          "Terminal (gap curto)",
+            gap_longo:          "Entrepico (gap longo)",
+            linha_divergente:   "Linha divergente",
+            veiculo_divergente: "Veículo divergente"
         };
 
         tbody.innerHTML = sugestoes.map(s => {
@@ -304,6 +305,7 @@ const UIController = {
             const corBarra   = s.confianca >= 70 ? "var(--success)"
                              : s.confianca >= 45 ? "var(--warning)"
                              : "var(--text-muted)";
+            const c = s.criterios || {};
 
             return `
                 <tr>
@@ -331,6 +333,12 @@ const UIController = {
                     <td style="font-size:0.8rem; color:var(--text-muted);">
                         ${this._formatarViagemSugestao(s.viagem)}
                     </td>
+                    <td class="score-detail">${c.veiculo  ?? ""}</td>
+                    <td class="score-detail">${c.linha    ?? ""}</td>
+                    <td class="score-detail">${c.sentido  ?? ""}</td>
+                    <td class="score-detail">${c.gapCurto ?? ""}</td>
+                    <td class="score-detail">${c.gapLongo ?? ""}</td>
+                    <td class="score-detail">${c.scoreRaw ?? ""}</td>
                 </tr>
             `;
         }).join("");
@@ -655,7 +663,8 @@ const UIController = {
     exportCSVSugestoes() {
         const lista = this._sugestoesVisiveis || [];
         const linhas = [
-            ["Horário", "Empresa", "Veículo", "Linha", "Motivo", "Confiança", "Viagem sugerida"]
+            ["Horário", "Empresa", "Veículo", "Linha", "Motivo", "Confiança",
+             "Viagem sugerida", "Pts Veículo", "Pts Linha", "Pts Sentido", "Pts GapCurto", "Pts GapLongo", "Score Raw"]
         ];
         for (const s of lista) {
             const p = s.pax;
@@ -663,7 +672,13 @@ const UIController = {
             const hIni = v?.isOmissao ? v.partidaPlanejada : v?.partidaReal;
             const hFim = v?.isOmissao ? v.chegadaPlanejada : v?.chegadaReal;
             const viagem = v ? `${v.linha_base} | ${v.veiculo} | ${(hIni||"").substring(0,5)} às ${(hFim||"").substring(0,5)}` : "";
-            linhas.push([p?.horario, p?.empresa, p?.veiculo, p?.linha, s.motivo, s.confianca + "%", viagem]);
+            const c = s.criterios || {};
+            linhas.push([
+                p?.horario, p?.empresa, p?.veiculo, p?.linha,
+                s.motivo, s.confianca + "%", viagem,
+                c.veiculo ?? "", c.linha ?? "", c.sentido ?? "",
+                c.gapCurto ?? "", c.gapLongo ?? "", c.scoreRaw ?? ""
+            ]);
         }
         this._downloadCSV(linhas, "sugestoes");
     },

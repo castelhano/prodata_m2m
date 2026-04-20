@@ -265,112 +265,78 @@ class Engine {
 
     // ==========================================================
     // ETAPA C — Análise de remanescentes
-    // Classifica passageiros não atribuídos e gera sugestões para revisão.
+    // Para cada passageiro não atribuído, busca viagens da mesma empresa
+    // dentro da janela gapLongoMax e pontua cada candidata.
+    // A melhor pontuação acima de confiancaMinima vira sugestão.
     // Nenhuma atribuição automática — o usuário confirma.
     // ==========================================================
 
     _etapaC(session) {
-        const { _idx } = session;
-        const gapMax  = APP_CONFIG.engine.gapCurtoMax;
-        const pesos   = APP_CONFIG.engine.pesos;
-        const confMin = APP_CONFIG.engine.confiancaMinima;
-        const tolCfg  = APP_CONFIG.engine.tolerancias;
+        const cfg     = APP_CONFIG.engine;
+        const pesos   = cfg.pesos;
+        const confMin = cfg.confiancaMinima;
+
+        const ignoradosIds = new Set((session.paxIgnorados || []).map(p => p.id));
+        const conciliadas  = new Set(session.empresasConciliadas || []);
+
+        const unassigned = session.passageiros.filter(p =>
+            !p.assigned &&
+            !ignoradosIds.has(p.id) &&
+            (conciliadas.size === 0 || conciliadas.has(p.empresa))
+        );
+
+        // Índice de viagens por empresa (inclui omissões — podem receber pax manualmente)
+        const viagensPorEmpresa = {};
+        for (const v of session.viagens) {
+            (viagensPorEmpresa[v.empresa] = viagensPorEmpresa[v.empresa] || []).push(v);
+        }
 
         const sugestoes = [];
 
-        for (const veiculo in _idx.paxPorVeiculo) {
-            const passageiros = _idx.paxPorVeiculo[veiculo].filter(p => !p.assigned);
-            if (passageiros.length === 0) continue;
+        for (const p of unassigned) {
+            const pMin = p.mHorario;
 
-            // Todas as viagens do veículo (incluindo omissões), ordenadas por início
-            const todasViagens = (_idx.viagensPorVeiculo[veiculo] || [])
-                .sort((a, b) => a.mInicio - b.mInicio);
+            // Candidatas: viagens da mesma empresa dentro da janela longa
+            const candidatas = (viagensPorEmpresa[p.empresa] || []).filter(v => {
+                const pMinAjust = this._ajustarPernoite(pMin, v);
+                return pMinAjust >= (v.mInicio - cfg.gapLongoMax)
+                    && pMinAjust <= (v.mFim    + cfg.gapLongoMax);
+            });
 
-            if (todasViagens.length === 0) continue;
+            let melhorViagem     = null;
+            let melhorScore      = -1;
+            let melhorCriterios  = null;
 
-            for (const p of passageiros) {
-                const pMin = p.mHorario;
-                let melhorSugestao = null;
+            for (const v of candidatas) {
+                const pMinAjust = this._ajustarPernoite(pMin, v);
 
-                for (let i = 0; i < todasViagens.length; i++) {
-                    const v    = todasViagens[i];
-                    const vAnt = todasViagens[i - 1] || null;
-                    const vPrx = todasViagens[i + 1] || null;
+                const pts = {
+                    veiculo:  p.veiculo === v.veiculo           ? pesos.matchVeiculo   : 0,
+                    linha:    p.linha   === v.linha_base        ? pesos.matchLinha     : 0,
+                    sentido:  (p.sentido && p.sentido === v.sentido) ? pesos.matchSentido : 0,
+                    gapCurto: 0,
+                    gapLongo: 0
+                };
 
-                    // --- Detecta o contexto do passageiro em relação a esta viagem ---
-
-                    // Caso: passageiro dentro da viagem (com tolerância) mas linha divergente
-                    const pMinAjust = this._ajustarPernoite(pMin, v);
-                    const tol = tolCfg[v.sentido] || tolCfg["UNICO"];
-                    const dentroJanela = pMinAjust >= (v.mInicio - tol.inicioMin) && pMinAjust <= (v.mFim + tol.fimMin);
-                    const linhaBate    = p.linha === v.linha_base;
-
-                    // Caso: passageiro no gap após esta viagem
-                    const aposViagem   = pMin > v.mFim;
-                    const antesProxima = vPrx ? pMin < vPrx.mInicio : false;
-                    const gap          = vPrx ? vPrx.mInicio - v.mFim : Infinity;
-                    const gapCurto     = gap <= gapMax;
-
-                    // --- Calcula confiança para candidatura desta viagem ---
-                    let confianca = 0;
-                    let motivo    = null;
-
-                    if (dentroJanela) {
-                        // Linha divergente (carro e horário batem, linha não)
-                        if (!linhaBate) {
-                            confianca += pesos.matchVeiculo;  // carro bate (já estamos iterando por veículo)
-                            // linha não bate — não soma matchLinha
-                            confianca += pesos.matchSentido * (p.sentido === v.sentido ? 1 : 0);
-                            motivo = "linha_divergente";
-                        }
-                        // Se linha bate e está dentro, já deveria ter sido pego na B — skip
-                    } else if (aposViagem && antesProxima) {
-                        // Passageiro no gap entre esta viagem e a próxima
-                        if (gapCurto) {
-                            // Gap curto → terminal → candidato é a PRÓXIMA viagem
-                            if (vPrx) {
-                                confianca += pesos.matchVeiculo;
-                                confianca += linhaBate || p.linha === vPrx.linha_base ? pesos.matchLinha : 0;
-                                confianca += pesos.dentroGapCurto;
-                                motivo = "gap_curto";
-                                // Registra sugestão para a PRÓXIMA viagem, não a atual
-                                const score = Math.min(confianca, 100);
-                                if (score >= confMin) {
-                                    sugestoes.push(this._buildSugestao(p, vPrx, motivo, score));
-                                }
-                                break; // Encontrou o gap — não precisa continuar
-                            }
-                        } else {
-                            // Gap longo → entrepico → candidato é a viagem ANTERIOR
-                            // Usa a distância real do passageiro até o FIM de vAnt (não o gap entre trips)
-                            if (vAnt) {
-                                const distancia = pMin - vAnt.mFim;
-                                if (distancia > 0 && distancia <= APP_CONFIG.engine.gapLongoMax) {
-                                    // foraGapLongo é progressivo: decai linearmente com a distância
-                                    const fator = 1 - distancia / APP_CONFIG.engine.gapLongoMax;
-                                    confianca += pesos.matchVeiculo;
-                                    confianca += p.linha === vAnt.linha_base ? pesos.matchLinha : 0;
-                                    confianca += Math.round(pesos.foraGapLongo * fator);
-                                    motivo = "gap_longo";
-                                    const score = Math.min(confianca, 100);
-                                    if (score >= confMin) {
-                                        sugestoes.push(this._buildSugestao(p, vAnt, motivo, score));
-                                    }
-                                }
-                                break;
-                            }
-                        }
-                    }
-
-                    // Registra sugestão de linha divergente se passou o threshold
-                    if (motivo === "linha_divergente") {
-                        const score = Math.min(confianca, 100);
-                        if (score >= confMin) {
-                            sugestoes.push(this._buildSugestao(p, v, motivo, score));
-                        }
-                        break;
-                    }
+                // Proximidade temporal: gapCurto tem mais peso que gapLongo
+                if (pMinAjust >= (v.mInicio - cfg.gapCurtoMax) && pMinAjust <= (v.mFim + cfg.gapCurtoMax)) {
+                    pts.gapCurto = pesos.dentroGapCurto;
+                } else {
+                    pts.gapLongo = pesos.dentroGapLongo;
                 }
+
+                const scoreRaw = pts.veiculo + pts.linha + pts.sentido + pts.gapCurto + pts.gapLongo;
+                const score    = Math.min(scoreRaw, 100);
+
+                if (score > melhorScore) {
+                    melhorScore     = score;
+                    melhorViagem    = v;
+                    melhorCriterios = { ...pts, scoreRaw };
+                }
+            }
+
+            if (melhorViagem && melhorScore >= confMin) {
+                sugestoes.push(this._buildSugestao(p, melhorViagem, melhorScore, melhorCriterios));
             }
         }
 
@@ -379,15 +345,23 @@ class Engine {
         session.sugestoes.sort((a, b) => b.confianca - a.confianca || a.mHorario - b.mHorario);
     }
 
-    _buildSugestao(pax, viagem, motivo, confianca) {
+    _buildSugestao(pax, viagem, confianca, criterios) {
+        // Motivo derivado dos critérios que contribuíram
+        let motivo;
+        if      (criterios.veiculo > 0 && criterios.linha > 0) motivo = criterios.gapCurto > 0 ? "gap_curto" : "gap_longo";
+        else if (criterios.veiculo > 0)                         motivo = "linha_divergente";
+        else if (criterios.linha   > 0)                         motivo = "veiculo_divergente";
+        else                                                     motivo = criterios.gapCurto > 0 ? "gap_curto" : "gap_longo";
+
         return {
             paxId:      pax.id,
             tripId:     viagem.id,
-            motivo,     // "gap_curto" | "gap_longo" | "linha_divergente"
-            confianca,  // 0–100
+            motivo,
+            confianca,
+            criterios,  // { veiculo, linha, sentido, gapCurto, gapLongo, scoreRaw } — limpo ao alocar
             confirmada: false,
-            mHorario:   pax.mHorario,  // para ordenação (não requer ref ao objeto)
-            pax,        // referência — facilita renderização sem re-busca (stripped on export)
+            mHorario:   pax.mHorario,
+            pax,        // referência (stripped on export)
             viagem      // referência (stripped on export)
         };
     }
