@@ -798,7 +798,7 @@ input[type="checkbox"]:checked::after {
 ============================================================ -->
 <header id="topbar">
     <div class="logo">
-        <div class="logo-icon">
+        <div class="logo-icon" data-path="D:\Files\_Conciliacao" onclick="defaultPath(this)">
             <i data-lucide="bus"></i>
         </div>
         TRANSSYNC <span class="logo-sub">PRO</span>
@@ -1217,6 +1217,21 @@ document.getElementById('select-all-sugestoes').addEventListener('change', funct
     document.querySelectorAll('.sugestao-checkbox')
         .forEach(cb => cb.checked = this.checked);
 });
+
+// ============================================================
+// Função utilirária com o Path default de importação
+// ============================================================
+function defaultPath(el) {
+  const value = el.getAttribute('data-path');
+  navigator.clipboard.writeText(value)
+    .then(() => {
+      console.log("Copiado: " + value);
+    })
+    .catch(err => {
+      console.error(err);
+    });
+}
+
 </script>
 
 </body>
