@@ -28,11 +28,14 @@ const Anomalies = {
         const session = AppState.session;
         if (!session) return alert("Nenhum dado processado.");
 
-        const cfg      = APP_CONFIG.anomalies.omissoesComPax;
-        const pesos    = cfg.pesos;
+        const cfg         = APP_CONFIG.anomalies.omissoesComPax;
+        const pesos       = cfg.pesos;
         const conciliadas = new Set(session.empresasConciliadas || []);
+        const ignoradosIds = new Set((session.paxIgnorados || []).map(p => p.id));
         const orphaos  = session.passageiros.filter(p =>
-            !p.assigned && (conciliadas.size === 0 || conciliadas.has(p.empresa))
+            !p.assigned &&
+            !ignoradosIds.has(p.id) &&
+            (conciliadas.size === 0 || conciliadas.has(p.empresa))
         );
 
         // Indexa órfãos por veículo para cálculo de densidade
@@ -124,7 +127,7 @@ const Anomalies = {
             }
 
             // Penalidade proporcional por passageiros de linhas ignoradas na janela
-            const linhasIgnoradas = Engine._buildLinhasIgnoradasSet(APP_CONFIG.fontes.bilhetagem.linhasIgnoradas);
+            const linhasIgnoradas = new Set((APP_CONFIG.fontes.bilhetagem.linhasIgnoradas || []).map(l => String(l).trim()));
             const paxIgnoradosNaJanela = paxNaJanela.filter(p => linhasIgnoradas.has(p.linha));
             if (paxIgnoradosNaJanela.length > 0) {
                 const proporcao  = paxIgnoradosNaJanela.length / paxNaJanela.length;

@@ -116,17 +116,20 @@ const APP_CONFIG = {
     engine: {
 
         // Classificação dos status de viagem no GPS
+        // value    : código bruto que vem no arquivo
+        // concilia : participa das etapas A e B (recebe passageiros automaticamente)
+        // isOmissao: entra no modelo mas sem pax automático; usa horário planejado
+        // isExtra  : viagem realizada sem horário planejado (extra operacional)
+        // ignorar  : excluído do modelo completamente pelo Engine
+        // abbr     : rótulo exibido na interface
         //
-        // statusProdutivo + statusExtra → participam normalmente das etapas A e B
-        // statusOmissao               → entram no modelo, não recebem pax automaticamente
-        // statusOcioso                → ignorados pelo Engine (preservados no modelo para uso futuro)
-        //
-        // statusExtra (3): viagem realizada sem horário planejado (extra operacional)
-        // viagemEditada (col. V "Sim"/"Nao"): atributo da viagem, lido separadamente — não é status
-        statusProdutivo: ["1"],
-        statusExtra:     ["3"],   // Tratado como produtivo pelo Engine
-        statusOmissao:   ["2"],
-        statusOcioso:    ["6"],   // Ignorado pelo Engine — reservado para uso futuro
+        // viagemEditada (col. W "Sim"/"Nao"): atributo da viagem, não é status
+        status: {
+            produtivo: { value: "1", concilia: true,  isOmissao: false, isExtra: false, ignorar: false, abbr: "P" },
+            extra:     { value: "3", concilia: true,  isOmissao: false, isExtra: true,  ignorar: false, abbr: "X" },
+            omissao:   { value: "2", concilia: false, isOmissao: true,  isExtra: false, ignorar: false, abbr: "O" },
+            ocioso:    { value: "6", concilia: false, isOmissao: false, isExtra: false, ignorar: true,  abbr: "-" },
+        },
 
         // --- Etapa A: Match direto ---
         // Critério duro: veiculo + linha + passageiro dentro de [mInicio, mFim]
@@ -149,7 +152,7 @@ const APP_CONFIG = {
         // gap <= gapCurtoMax           → passageiro no terminal → sugerir PRÓXIMA viagem
         // gapCurtoMax < gap <= gapLongoMax → passageiro no entrepico → sugerir viagem ANTERIOR
         // gap > gapLongoMax            → gap excessivo → sem sugestão
-        gapCurtoMax:  15,  // minutos
+        gapCurtoMax:  20,  // minutos
         gapLongoMax:  30,  // minutos — acima deste valor a confiança vai a zero
 
         // Pesos para cálculo de confiança das sugestões (soma define score 0–N)

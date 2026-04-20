@@ -253,6 +253,11 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("clear_btn")
         .addEventListener("click", () => UIController.limparFiltros());
 
+    document.getElementById("btn-csv-sugestoes")
+        .addEventListener("click", () => UIController.exportCSVSugestoes());
+    document.getElementById("btn-csv-excecoes")
+        .addEventListener("click", () => UIController.exportCSVExcecoes());
+
     // Busca de viagens no seletor manual
     document.getElementById("btn-buscar-viagens")
         .addEventListener("click", () => UIController.atualizarSeletorViagens());

@@ -211,6 +211,7 @@ const UIController = {
     // ==========================================================
 
     renderExcecoes(lista) {
+        this._excecoesVisiveis = lista;
         const tbody = document.getElementById("table-exceptions-body");
         const limite = APP_CONFIG.ui.excecoesPorPagina;
 
@@ -255,6 +256,10 @@ const UIController = {
         const section = document.getElementById("suggestions-section");
         if (!sugestoes || sugestoes.length === 0) {
             section.classList.add("hidden");
+            const statEl = document.getElementById("stat-sugestoes");
+            if (statEl) statEl.innerText = "0";
+            const badge = document.getElementById("badge-sugestoes");
+            if (badge) badge.innerText = "0 pendentes";
             return;
         }
 
@@ -281,6 +286,7 @@ const UIController = {
     },
 
     _renderSugestoesTabela(sugestoes) {
+        this._sugestoesVisiveis = sugestoes;
         const selectAll = document.getElementById("select-all-sugestoes");
         if (selectAll) selectAll.checked = false;
 
@@ -378,9 +384,10 @@ const UIController = {
     // ==========================================================
 
     atualizarSeletorViagens() {
-        const select  = document.getElementById("select-target-trip");
-        const fVeic   = document.getElementById("target-filter-veiculo")?.value.trim() || "";
-        const fLinha  = document.getElementById("target-filter-linha")?.value.toLowerCase().trim() || "";
+        const select   = document.getElementById("select-target-trip");
+        const fVeic    = document.getElementById("target-filter-veiculo")?.value.trim() || "";
+        const fLinha   = document.getElementById("target-filter-linha")?.value.toLowerCase().trim() || "";
+        const fStatus  = document.getElementById("target-filter-status")?.value || "";
 
         if (!AppState.session) return;
         if (!fVeic && !fLinha) {
@@ -390,9 +397,14 @@ const UIController = {
 
         const viagens = AppState.session.viagens
             .filter(v => {
-                const matchV = !fVeic  || String(v.veiculo).includes(fVeic);
-                const matchL = !fLinha || v.linha.toLowerCase().includes(fLinha);
-                return matchV && matchL;
+                const matchV = !fVeic   || String(v.veiculo).includes(fVeic);
+                const matchL = !fLinha  || v.linha.toLowerCase().includes(fLinha);
+                const matchS = !fStatus
+                    || (fStatus === "produtivo"  && !v.isOmissao && !v.isExtra)
+                    || (fStatus === "omissao"    && v.isOmissao)
+                    || (fStatus === "extra"      && v.isExtra)
+                    || (fStatus === "editada"    && v.isEditada);
+                return matchV && matchL && matchS;
             })
             .sort((a, b) => {
                 if (a.linha_base !== b.linha_base) return a.linha_base.localeCompare(b.linha_base);
@@ -407,23 +419,12 @@ const UIController = {
             return;
         }
 
-        console.log("[DEBUG isEditada] viagens carregadas no select:", viagens.map(v => ({
-            id:          v.id,
-            linha:       v.linha_base,
-            veiculo:     v.veiculo,
-            isEditada:   v.isEditada,
-            isOmissao:   v.isOmissao,
-            isExtra:     v.isExtra
-        })));
-
         select.innerHTML = "<option value=''>Selecione a viagem destino...</option>"
             + viagens.map(v => {
-                // Ícone de estado
-                let icone = "[P]";
-                if (v.isOmissao)            icone = "[O]";
-                else if (v.convertidaDeOmissao) icone = "[C]";
-                else if (v.isExtra)             icone = "[X]";
-                else if (v.isEditada)           icone = "[E]";
+                // Ícone de estado: abbr vem do mapa de status; [C] é estado derivado (omissão convertida)
+                const statusDef = Object.values(APP_CONFIG.engine.status).find(s => s.value === v.statusOriginal);
+                const abbr  = v.convertidaDeOmissao ? "C" : (statusDef?.abbr || "?");
+                const icone = `[${abbr}]`;
 
                 const hIni = v.isOmissao ? v.partidaPlanejada  : v.partidaReal;
                 const hFim = v.isOmissao ? v.chegadaPlanejada  : v.chegadaReal;
@@ -645,6 +646,48 @@ const UIController = {
         )].sort();
         select.innerHTML = "<option value=''>Empresa (Todas)</option>"
             + empresas.map(e => `<option value="${e}">${e}</option>`).join("");
+    },
+
+    // ==========================================================
+    // EXPORTAÇÃO CSV
+    // ==========================================================
+
+    exportCSVSugestoes() {
+        const lista = this._sugestoesVisiveis || [];
+        const linhas = [
+            ["Horário", "Empresa", "Veículo", "Linha", "Motivo", "Confiança", "Viagem sugerida"]
+        ];
+        for (const s of lista) {
+            const p = s.pax;
+            const v = s.viagem;
+            const hIni = v?.isOmissao ? v.partidaPlanejada : v?.partidaReal;
+            const hFim = v?.isOmissao ? v.chegadaPlanejada : v?.chegadaReal;
+            const viagem = v ? `${v.linha_base} | ${v.veiculo} | ${(hIni||"").substring(0,5)} às ${(hFim||"").substring(0,5)}` : "";
+            linhas.push([p?.horario, p?.empresa, p?.veiculo, p?.linha, s.motivo, s.confianca + "%", viagem]);
+        }
+        this._downloadCSV(linhas, "sugestoes");
+    },
+
+    exportCSVExcecoes() {
+        const lista = this._excecoesVisiveis || [];
+        const linhas = [
+            ["Horário", "Empresa", "Veículo", "Linha", "Tipo"]
+        ];
+        for (const p of lista) {
+            linhas.push([p.horario, p.empresa, p.veiculo, p.linha, p.tipo]);
+        }
+        this._downloadCSV(linhas, "excecoes");
+    },
+
+    _downloadCSV(linhas, prefixo) {
+        const escape = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+        const csv = linhas.map(row => row.map(escape).join(";")).join("\r\n");
+        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        const data = new Date().toISOString().split("T")[0].replace(/-/g, "_");
+        a.href = url; a.download = `${prefixo}_${data}.csv`; a.click();
+        URL.revokeObjectURL(url);
     },
 
     // Pad de string para alinhamento monospaced no seletor de viagens

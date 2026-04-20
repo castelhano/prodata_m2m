@@ -54,44 +54,26 @@ class Engine {
         const cfg = APP_CONFIG;
 
         // --- Viagens (GPS) ---
-        const statusAtivos = [
-            ...cfg.engine.statusProdutivo,
-            ...cfg.engine.statusExtra,
-            ...cfg.engine.statusOmissao
-            // statusOcioso é ignorado aqui intencionalmente
-        ];
+        const statusAtivos = Object.values(cfg.engine.status)
+            .filter(s => !s.ignorar)
+            .map(s => s.value);
 
         const viagens = this._rawGps
             .filter(r => statusAtivos.includes(String(r.statusViagem)))
             .map((r, idx) => this._buildViagem(r, idx));
 
-        const valoresEditada = [...new Set(this._rawGps.map(r => r.viagemEditada))];
-        console.log("[DEBUG isEditada] valores distintos de viagemEditada no GPS:", valoresEditada);
-        console.log("[DEBUG isEditada] amostra de viagens (primeiras 3):", this._rawGps.slice(0, 3).map(r => ({
-            linha:         r.linha,
-            empresa:       r.empresa,
-            statusViagem:  r.statusViagem,
-            viagemEditada: r.viagemEditada,
-            _tipo:         typeof r.viagemEditada
-        })));
-
         // --- Passageiros (Bilhetagem) ---
         // Linhas ignoradas são excluídas da conciliação mas preservadas no modelo
-        const linhasIgnoradas = Engine._buildLinhasIgnoradasSet(cfg.fontes.bilhetagem.linhasIgnoradas);
+        const linhasIgnoradas = new Set(
+            (cfg.fontes.bilhetagem.linhasIgnoradas || []).map(l => String(l).trim())
+        );
 
         const passageiros = this._rawPax.map((r, idx) => this._buildPassageiro(r, idx));
-
-        console.log("[DEBUG linhasIgnoradas] set:", [...linhasIgnoradas]);
-        const linhasNosPax = [...new Set(passageiros.map(p => p.linha))].sort();
-        console.log("[DEBUG linhasIgnoradas] linhas distintas na bilhetagem:", linhasNosPax);
-        const linhasMatch = linhasNosPax.filter(l => linhasIgnoradas.has(l));
-        console.log("[DEBUG linhasIgnoradas] linhas que batem no set:", linhasMatch);
 
         const [paxConciliaveis, paxIgnorados] = this._partition(
             passageiros,
             p => !linhasIgnoradas.has(p.linha)
         );
-        console.log("[DEBUG linhasIgnoradas] paxIgnorados:", paxIgnorados.length, "paxConciliaveis:", paxConciliaveis.length);
 
         // --- Índices para performance ---
         // paxPorVeiculo considera apenas as empresas selecionadas para conciliação
@@ -135,10 +117,11 @@ class Engine {
 
     _buildViagem(r, idx) {
         const cfg    = APP_CONFIG.engine;
-        const status = String(r.statusViagem);
+        const status    = String(r.statusViagem);
+        const statusDef = Object.values(cfg.status).find(s => s.value === status) || {};
 
-        const isOmissao  = cfg.statusOmissao.includes(status);
-        const isExtra    = cfg.statusExtra.includes(status);
+        const isOmissao = statusDef.isOmissao === true;
+        const isExtra   = statusDef.isExtra   === true;
         const editadaRaw = String(r.viagemEditada || "").trim().toLowerCase();
         const isEditada  = editadaRaw === "sim" || editadaRaw === "s" || editadaRaw === "1";
 
@@ -176,6 +159,7 @@ class Engine {
             pernoite,
 
             // Flags de estado
+            statusOriginal:      status,
             isOmissao,
             isExtra,
             isEditada,
@@ -290,6 +274,7 @@ class Engine {
         const gapMax  = APP_CONFIG.engine.gapCurtoMax;
         const pesos   = APP_CONFIG.engine.pesos;
         const confMin = APP_CONFIG.engine.confiancaMinima;
+        const tolCfg  = APP_CONFIG.engine.tolerancias;
 
         const sugestoes = [];
 
@@ -299,7 +284,6 @@ class Engine {
 
             // Todas as viagens do veículo (incluindo omissões), ordenadas por início
             const todasViagens = (_idx.viagensPorVeiculo[veiculo] || [])
-                .filter(v => !APP_CONFIG.engine.statusOcioso.includes(String(v.statusViagem)))
                 .sort((a, b) => a.mInicio - b.mInicio);
 
             if (todasViagens.length === 0) continue;
@@ -315,9 +299,10 @@ class Engine {
 
                     // --- Detecta o contexto do passageiro em relação a esta viagem ---
 
-                    // Caso: passageiro dentro da viagem mas linha divergente (3.3)
+                    // Caso: passageiro dentro da viagem (com tolerância) mas linha divergente
                     const pMinAjust = this._ajustarPernoite(pMin, v);
-                    const dentroJanela = pMinAjust >= v.mInicio && pMinAjust <= v.mFim;
+                    const tol = tolCfg[v.sentido] || tolCfg["UNICO"];
+                    const dentroJanela = pMinAjust >= (v.mInicio - tol.inicioMin) && pMinAjust <= (v.mFim + tol.fimMin);
                     const linhaBate    = p.linha === v.linha_base;
 
                     // Caso: passageiro no gap após esta viagem
@@ -647,9 +632,9 @@ class Engine {
 
     // Retorna apenas viagens que recebem passageiros automaticamente (etapas A e B)
     _viagensConciliaveis(viagens = []) {
-        const { statusProdutivo, statusExtra } = APP_CONFIG.engine;
+        const statusMap = Object.values(APP_CONFIG.engine.status);
         return viagens
-            .filter(v => !v.isOmissao)
+            .filter(v => (statusMap.find(s => s.value === v.statusOriginal) || {}).concilia === true)
             .sort((a, b) => a.mInicio - b.mInicio);
     }
 
@@ -694,18 +679,4 @@ class Engine {
     }
 
 
-    // ==========================================================
-    // UTILITÁRIO PÚBLICO — Set de linhas ignoradas
-    // Inclui tanto o valor literal quanto a versão sem zeros à
-    // esquerda para linhas puramente numéricas (ex: "032" → "32"),
-    // pois PapaParse pode ler como inteiro em alguns exports.
-    // ==========================================================
-    static _buildLinhasIgnoradasSet(linhas = []) {
-        return new Set(
-            linhas.flatMap(l => {
-                const s = String(l).trim();
-                return /^\d+$/.test(s) ? [s, String(parseInt(s, 10))] : [s];
-            })
-        );
-    }
 }

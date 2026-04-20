@@ -1010,6 +1010,9 @@ input[type="checkbox"]:checked::after {
         </div>
 
         <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+            <button id="btn-csv-sugestoes" class="btn btn-ghost">
+                <i data-lucide="download"></i> CSV
+            </button>
             <button id="btn-confirmar-sugestoes" class="btn btn-success">
                 <i data-lucide="check-circle"></i> Confirmar selecionadas
             </button>
@@ -1058,6 +1061,9 @@ input[type="checkbox"]:checked::after {
             <button id="clear_btn" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
                 <i data-lucide="x"></i>
             </button>
+            <button id="btn-csv-excecoes" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
+                <i data-lucide="download"></i> CSV
+            </button>
         </div>
 
         <!-- Tabela -->
@@ -1088,6 +1094,16 @@ input[type="checkbox"]:checked::after {
             <div class="filter-group">
                 <label>Linha</label>
                 <input type="text" id="target-filter-linha" placeholder="Ex: A14" style="width:90px;">
+            </div>
+            <div class="filter-group">
+                <label>Status</label>
+                <select id="target-filter-status" style="width:110px;">
+                    <option value="">Todos</option>
+                    <option value="produtivo">Produtivo</option>
+                    <option value="omissao">Omissão</option>
+                    <option value="extra">Extra</option>
+                    <option value="editada">Editada</option>
+                </select>
             </div>
             <button id="btn-buscar-viagens" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
                 <i data-lucide="search"></i>
