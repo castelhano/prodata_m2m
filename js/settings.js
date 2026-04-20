@@ -72,6 +72,7 @@ const APP_CONFIG = {
                     // Ambos convergem para o valor canônico (padrão GPS)
                     "902":  "A02",
                     "906":  "A06",
+                    "907":  "A07",
                     "908":  "A08",
                     "910":  "A10",
                     "914":  "A14",
@@ -87,7 +88,7 @@ const APP_CONFIG = {
             // Linhas presentes na bilhetagem que não existem no GPS.
             // Passageiros dessas linhas são preservados no modelo de dados
             // mas ignorados pelo Engine — sem tentativa de conciliação.
-            linhasIgnoradas: ["F01"]
+            linhasIgnoradas: ["F01", "032", "033", "034"]
         }
     },
 
@@ -191,11 +192,12 @@ const APP_CONFIG = {
             densidadePercentualMinimo: 80,
 
             pesos: {
-                matchVeiculo:    40,   // Carro planejado da omissão bate com carro do passageiro
-                matchLinha:      20,   // Linha planejada bate com linha do passageiro
-                gapEntreViagens: 50,   // Omissão está entre duas viagens produtivas da mesma tabela
-                densidadeAlta:   30,   // Concentração de órfãos acima de densidadePercentualMinimo
-                foraTolerancia:  15    // Passageiros detectados na borda da janela de auditoria
+                matchVeiculo:           40,   // Carro planejado da omissão bate com carro do passageiro
+                matchLinha:             20,   // Linha planejada bate com linha do passageiro
+                gapEntreViagens:        50,   // Omissão está entre duas viagens produtivas da mesma tabela
+                densidadeAlta:          30,   // Concentração de órfãos acima de densidadePercentualMinimo
+                foraTolerancia:         15,   // Passageiros detectados na borda da janela de auditoria
+                penalidadeLinhaIgnorada:-20   // Penalidade proporcional quando pax na janela são de linhas ignoradas
             },
 
             thresholds: {

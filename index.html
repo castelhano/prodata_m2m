@@ -872,6 +872,10 @@ input[type="checkbox"]:checked::after {
                     Passageiros a considerar
                 </div>
                 <p class="selector-painel-desc">Desmarcadas são descartadas — não constarão no exportado.</p>
+                <div style="display:flex;gap:12px;margin-bottom:6px;">
+                    <a href="#" onclick="event.preventDefault();document.querySelectorAll('#checkboxes-pax input[type=checkbox]').forEach(c=>c.checked=true)" style="font-size:0.72rem;color:var(--accent);font-family:var(--mono);text-decoration:none;">Marcar todos</a>
+                    <a href="#" onclick="event.preventDefault();document.querySelectorAll('#checkboxes-pax input[type=checkbox]').forEach(c=>c.checked=false)" style="font-size:0.72rem;color:var(--text-3);font-family:var(--mono);text-decoration:none;">Desmarcar todos</a>
+                </div>
                 <div id="checkboxes-pax" class="selector-checkboxes"></div>
             </div>
 
@@ -882,6 +886,10 @@ input[type="checkbox"]:checked::after {
                     Empresas para conciliação
                 </div>
                 <p class="selector-painel-desc">Marcadas entram nas etapas A/B/C. As demais ficam no exportado como não conciliadas.</p>
+                <div style="display:flex;gap:12px;margin-bottom:6px;">
+                    <a href="#" onclick="event.preventDefault();document.querySelectorAll('#checkboxes-conciliacao input[type=checkbox]').forEach(c=>c.checked=true)" style="font-size:0.72rem;color:var(--accent);font-family:var(--mono);text-decoration:none;">Marcar todos</a>
+                    <a href="#" onclick="event.preventDefault();document.querySelectorAll('#checkboxes-conciliacao input[type=checkbox]').forEach(c=>c.checked=false)" style="font-size:0.72rem;color:var(--text-3);font-family:var(--mono);text-decoration:none;">Desmarcar todos</a>
+                </div>
                 <div id="checkboxes-conciliacao" class="selector-checkboxes"></div>
             </div>
         </div>
@@ -964,6 +972,15 @@ input[type="checkbox"]:checked::after {
                 <label>Linha</label>
                 <input type="text" id="sug-filter-linha" placeholder="Ex: A14">
             </div>
+            <div class="filter-group">
+                <label>Confiança</label>
+                <select id="sug-filter-confianca">
+                    <option value="">Todas</option>
+                    <option value="alto">Alto (≥70%)</option>
+                    <option value="medio">Médio (45–69%)</option>
+                    <option value="baixo">Baixo (&lt;45%)</option>
+                </select>
+            </div>
             <button id="sug-filter-btn" class="btn btn-ghost" style="height:32px; align-self:flex-end;">
                 <i data-lucide="search"></i> Filtrar
             </button>
@@ -1008,6 +1025,7 @@ input[type="checkbox"]:checked::after {
             <span class="etapa-num">ETAPA 04</span>
             <span class="etapa-title">Exceções — atribuição manual</span>
             <div class="etapa-sep"></div>
+            <span class="badge badge-warning" id="badge-excecoes"></span>
         </div>
 
         <!-- Filtros -->

@@ -91,14 +91,14 @@ const UIController = {
         document.getElementById("checkboxes-pax").innerHTML =
             empresasPax.map(e => {
                 const cfg = Object.values(empresasCfg).find(c => c.nome === e);
-                const checked = cfg ? cfg.defCorte !== false : true;
+                const checked = cfg ? cfg.defCorte === true : false;
                 return checkItem("company-pax-select", e, checked);
             }).join("");
 
         document.getElementById("checkboxes-conciliacao").innerHTML =
             empresasGps.map(e => {
                 const cfg = Object.values(empresasCfg).find(c => c.nome === e);
-                const checked = cfg ? cfg.defConciliacao !== false : true;
+                const checked = cfg ? cfg.defConciliacao === true : false;
                 return checkItem("company-conc-select", e, checked);
             }).join("");
 
@@ -139,7 +139,7 @@ const UIController = {
 
         const checkItem = (val) => {
             const cfg = Object.values(empresasCfg).find(c => c.nome === val);
-            const checked = cfg ? cfg.defConciliacao !== false : true;
+            const checked = cfg ? cfg.defConciliacao === true : false;
             return `<label style="display:flex;gap:8px;cursor:pointer;align-items:center;">
                 <input type="checkbox" class="company-conc-select" value="${val}"${checked ? " checked" : ""}> ${val}
              </label>`;
@@ -179,6 +179,9 @@ const UIController = {
         document.getElementById("stat-unassigned-pax").innerText = r.naoAtribuidos.toLocaleString();
         document.getElementById("stat-total-trips").innerText    = r.totalViagens.toLocaleString();
         document.getElementById("stat-total-omissoes").innerText = r.omissoes.toLocaleString();
+
+        const badgeExc = document.getElementById("badge-excecoes");
+        if (badgeExc) badgeExc.innerText = `${r.naoAtribuidos.toLocaleString()} pendentes`;
 
         // Exibe seções
         ["section-resumo", "section-excecoes", "suggestions-section", "section-operacoes"]
@@ -267,7 +270,7 @@ const UIController = {
                 + empresas.map(e => `<option value="${e}">${e}</option>`).join("");
         }
 
-        document.getElementById("stat-sugestoes").innerText = sugestoes.length;
+        document.getElementById("stat-sugestoes").innerText = sugestoes.length.toLocaleString();
         const badge = document.getElementById("badge-sugestoes");
         if (badge) badge.innerText = `${sugestoes.length} pendentes`;
 
@@ -334,11 +337,15 @@ const UIController = {
         const fEmp   = document.getElementById("sug-filter-empresa")?.value || "";
         const fVeic  = document.getElementById("sug-filter-veiculo")?.value.trim() || "";
         const fLinha = document.getElementById("sug-filter-linha")?.value.trim().toLowerCase() || "";
+        const fConf  = document.getElementById("sug-filter-confianca")?.value || "";
 
         const filtradas = AppState.session.sugestoes.filter(s => {
             if (fEmp   && s.pax?.empresa !== fEmp)                        return false;
             if (fVeic  && !String(s.pax?.veiculo).includes(fVeic))        return false;
             if (fLinha && !s.pax?.linha.toLowerCase().includes(fLinha))   return false;
+            if (fConf === "alto"  && s.confianca < 70)                    return false;
+            if (fConf === "medio" && (s.confianca < 45 || s.confianca >= 70)) return false;
+            if (fConf === "baixo" && s.confianca >= 45)                   return false;
             return true;
         });
 
@@ -346,7 +353,7 @@ const UIController = {
     },
 
     limparFiltrosSugestoes() {
-        ["sug-filter-empresa", "sug-filter-veiculo", "sug-filter-linha"].forEach(id => {
+        ["sug-filter-empresa", "sug-filter-veiculo", "sug-filter-linha", "sug-filter-confianca"].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = "";
         });
@@ -413,9 +420,10 @@ const UIController = {
                 const sen  = this._pad(v.sentido,    5);
                 const pax  = String(v.paxEfetivos.length).padStart(3, " ");
 
+                const edit  = v.isEditada ? "[x]" : "[ ]";
                 const label = `${icone} [${veic}] ${lin} | ${sen} | `
                     + `${(hIni || "").substring(0, 5)} às ${(hFim || "").substring(0, 5)} `
-                    + `(${pax} pax)`;
+                    + `${edit} (${pax} pax)`;
 
                 return `<option value="${v.id}">${label.replace(/ /g, "\u00A0")}</option>`;
             }).join("");
@@ -525,13 +533,15 @@ const UIController = {
     // MODAL GENÉRICO
     // ==========================================================
 
-    showModal(titulo, htmlContent) {
+    showModal(titulo, htmlContent, opts = {}) {
         document.getElementById("modal-container")?.remove();
         document.body.classList.add("modal-open");
 
+        const maxWidth = opts.maxWidth || "760px";
+
         document.body.insertAdjacentHTML("beforeend", `
             <div class="modal-overlay" id="modal-container">
-                <div class="modal-content">
+                <div class="modal-content" style="max-width:${maxWidth};">
                     <div class="modal-header">
                         <h2 style="font-size:1.1rem; color:var(--primary); margin:0;">
                             ${titulo}

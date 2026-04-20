@@ -123,6 +123,18 @@ const Anomalies = {
                 criterios.push({ label: `${paxNaBorda.length} passageiro(s) detectados na borda da janela de auditoria`, pts: pesos.foraTolerancia });
             }
 
+            // Penalidade proporcional por passageiros de linhas ignoradas na janela
+            const linhasIgnoradas = new Set(
+                (APP_CONFIG.fontes.bilhetagem.linhasIgnoradas || []).map(l => String(l))
+            );
+            const paxIgnoradosNaJanela = paxNaJanela.filter(p => linhasIgnoradas.has(p.linha));
+            if (paxIgnoradosNaJanela.length > 0) {
+                const proporcao  = paxIgnoradosNaJanela.length / paxNaJanela.length;
+                const penalidade = Math.round(pesos.penalidadeLinhaIgnorada * proporcao);
+                score += penalidade;
+                criterios.push({ label: `${paxIgnoradosNaJanela.length} pax de linha(s) ignorada(s) na janela`, pts: penalidade });
+            }
+
             if (score < cfg.pontuacaoMinima) continue;
 
             // Classifica nível de suspeita
@@ -134,6 +146,7 @@ const Anomalies = {
                 omissao,
                 veiculoInferido,
                 paxNaJanela,
+                totalOrfaosVeiculo: veiculoInferido ? (orphaosPorVeiculo[veiculoInferido] || []).length : 0,
                 score,
                 nivel,
                 mPlanejado,
@@ -267,53 +280,148 @@ const Anomalies = {
             );
         }
 
-        const corNivel = { alto: "var(--danger)", medio: "var(--warning)", baixo: "var(--text-muted)" };
+        // Armazena referências para o botão Atribuir Todos
+        Anomalies._pendentes = {};
+        suspeitos.forEach((s, i) => { Anomalies._pendentes[i] = s; });
 
-        const blocos = suspeitos.map(s => {
+        const corNivel = { alto: "var(--danger)", medio: "var(--warning)", baixo: "var(--text-2)" };
+
+        const blocos = suspeitos.map((s, idx) => {
             const cor   = corNivel[s.nivel];
             const label = s.nivel.charAt(0).toUpperCase() + s.nivel.slice(1);
 
-            const badgesCriterios = s.criterios.map(c => `
-                <span style="display:inline-flex; align-items:center; justify-content: space-between; gap:5px;
-                             background:var(--bg-4); border:1px solid var(--border);
-                             border-radius:4px; padding:3px 8px; font-size:0.76rem;
-                             color:var(--text-muted); white-space:nowrap;width: 100%;">
-                    ${c.label}
-                    <span style="font-weight:600; color:${cor};">+${c.pts}</span>
-                </span>
-            `).join("");
+            const badgesCriterios = s.criterios.map(c => {
+                const ptsCor = c.pts < 0 ? "var(--danger)" : cor;
+                const ptsLabel = c.pts >= 0 ? `+${c.pts}` : `${c.pts}`;
+                return `
+                    <span style="display:inline-flex; align-items:center; justify-content:space-between; gap:5px;
+                                 background:var(--bg-4); border:1px solid var(--border);
+                                 border-radius:4px; padding:3px 8px; font-size:0.76rem;
+                                 color:var(--text-2); white-space:nowrap; width:100%;">
+                        ${c.label}
+                        <span style="font-weight:600; color:${ptsCor};">${ptsLabel}</span>
+                    </span>
+                `;
+            }).join("");
+
+            // Viagens do veículo inferido (coluna direita)
+            const viagensVeiculo = s.veiculoInferido
+                ? (AppState.session?.viagens.filter(v => v.veiculo === s.veiculoInferido) || [])
+                    .sort((a, b) => a.mInicio - b.mInicio)
+                : [];
+
+            const viagensRows = viagensVeiculo.map(v => {
+                const hIni = v.isOmissao ? v.partidaPlanejada : v.partidaReal;
+                const hFim = v.isOmissao ? v.chegadaPlanejada : v.chegadaReal;
+                const editado = v.isEditada
+                    ? `<span style="color:var(--warning);">Sim</span>`
+                    : `<span style="color:var(--text-3);">—</span>`;
+                const tipoBadge = v.isOmissao
+                    ? `<span style="color:var(--danger); font-size:0.7rem;">[O]</span>`
+                    : v.convertidaDeOmissao
+                    ? `<span style="color:var(--success); font-size:0.7rem;">[C]</span>`
+                    : "";
+                return `<tr>
+                    <td style="padding:4px 8px;">${v.linha_base} ${tipoBadge}</td>
+                    <td style="padding:4px 8px;">${(hIni || "").substring(0, 5)}</td>
+                    <td style="padding:4px 8px;">${(hFim || "").substring(0, 5)}</td>
+                    <td style="padding:4px 8px;">${editado}</td>
+                    <td style="padding:4px 8px;">${v.paxEfetivos.length}</td>
+                </tr>`;
+            }).join("");
+
+            const viagensTableHtml = viagensVeiculo.length > 0
+                ? `<div style="max-height:220px; overflow-y:auto; border:1px solid var(--border); border-radius:4px;">
+                    <table style="width:100%; font-size:0.78rem; border-collapse:collapse; font-family:var(--mono);">
+                        <thead>
+                            <tr style="text-align:left; background:var(--bg-3);">
+                                <th style="padding:5px 8px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Linha</th>
+                                <th style="padding:5px 8px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Início</th>
+                                <th style="padding:5px 8px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Fim</th>
+                                <th style="padding:5px 8px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Editado</th>
+                                <th style="padding:5px 8px; color:var(--text-3); font-size:0.7rem; border-bottom:1px solid var(--border);">Pax</th>
+                            </tr>
+                        </thead>
+                        <tbody style="color:var(--text-2);">${viagensRows}</tbody>
+                    </table>
+                </div>`
+                : `<p style="font-size:0.78rem; color:var(--text-3);">Nenhuma viagem encontrada.</p>`;
 
             return `
-                <div style="border:1px solid var(--border); border-radius:6px;
+                <div id="omissao-card-${idx}" style="border:1px solid var(--border); border-radius:6px;
                             padding:14px; margin-bottom:12px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;
-                                margin-bottom:6px;">
-                        <strong>${s.omissao.linha} — ${s.omissao.partidaPlanejada}
-                            às ${s.omissao.chegadaPlanejada}</strong>
-                        <span style="color:${cor}; font-weight:bold; font-size:0.8rem;">
-                            ${label} (${s.score} pts)
-                        </span>
+                    <div style="display:flex; gap:16px; align-items:flex-start;">
+
+                        <!-- Coluna esquerda: análise -->
+                        <div style="flex:1; min-width:0;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;
+                                        margin-bottom:6px;">
+                                <strong>${s.omissao.linha} — ${s.omissao.partidaPlanejada}
+                                    às ${s.omissao.chegadaPlanejada}</strong>
+                                <span style="color:${cor}; font-weight:bold; font-size:0.8rem;">
+                                    ${label} (${s.score} pts)
+                                </span>
+                            </div>
+                            <div style="font-size:0.82rem; color:var(--text-2); margin-bottom:10px;">
+                                Veículo inferido: <strong>${s.veiculoInferido || "não identificado"}</strong>
+                                &nbsp;|&nbsp;
+                                Passageiros na janela: <strong>${s.paxNaJanela.length}</strong>
+                            </div>
+                            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+                                ${badgesCriterios}
+                            </div>
+                            <div style="display:flex; gap:8px;">
+                                <button onclick="UIController.autoFillAudit('${s.veiculoInferido}', '${s.omissao.id}')"
+                                    class="btn btn-success">
+                                    Investigar
+                                </button>
+                                <button onclick="Anomalies._atribuirTodosOmissao(${idx})"
+                                    class="btn btn-primary">
+                                    Atribuir Todos
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Coluna direita: viagens do carro inferido -->
+                        <div style="width:360px; flex-shrink:0; border-left:1px solid var(--border); padding-left:16px;">
+                            <div style="font-size:0.82rem; margin-bottom:6px; color:var(--text-2);">
+                                Viagens carro inferido: <strong style="color:var(--text);">${s.veiculoInferido || "—"}</strong>
+                            </div>
+                            <div style="font-size:0.78rem; color:var(--text-3); margin-bottom:8px; font-family:var(--mono);">
+                                Total Pax não atribuídos: <strong style="color:var(--text-2);">${s.totalOrfaosVeiculo}</strong>
+                                &nbsp;|&nbsp;
+                                Pax na janela: <strong style="color:var(--text-2);">${s.paxNaJanela.length}</strong>
+                            </div>
+                            ${viagensTableHtml}
+                        </div>
+
                     </div>
-                    <div style="font-size:0.82rem; color:var(--text-muted); margin-bottom:10px;">
-                        Veículo inferido: <strong>${s.veiculoInferido || "não identificado"}</strong>
-                        &nbsp;|&nbsp;
-                        Passageiros na janela: <strong>${s.paxNaJanela.length}</strong>
-                    </div>
-                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
-                        ${badgesCriterios}
-                    </div>
-                    <button onclick="UIController.autoFillAudit('${s.veiculoInferido}', '${s.omissao.id}')"
-                        class="btn btn-success">
-                        Investigar
-                    </button>
                 </div>
             `;
         }).join("");
 
         UIController.showModal(
             `Omissões suspeitas (${suspeitos.length})`,
-            blocos
+            blocos,
+            { maxWidth: "1100px" }
         );
+    },
+
+
+    // ----------------------------------------------------------
+    // Atribui todos os passageiros da janela à omissão e remove
+    // o card do modal sem fechar a janela
+    // ----------------------------------------------------------
+    _atribuirTodosOmissao(idx) {
+        const s = Anomalies._pendentes?.[idx];
+        if (!s) return;
+
+        const paxIds = s.paxNaJanela.map(p => p.id);
+        Engine.atribuirManualmente(AppState.session, paxIds, s.omissao.id);
+        UIController.updateDashboard(AppState.session);
+
+        document.getElementById(`omissao-card-${idx}`)?.remove();
+        delete Anomalies._pendentes[idx];
     },
 
 
