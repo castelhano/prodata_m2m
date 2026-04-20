@@ -65,17 +65,33 @@ class Engine {
             .filter(r => statusAtivos.includes(String(r.statusViagem)))
             .map((r, idx) => this._buildViagem(r, idx));
 
+        const valoresEditada = [...new Set(this._rawGps.map(r => r.viagemEditada))];
+        console.log("[DEBUG isEditada] valores distintos de viagemEditada no GPS:", valoresEditada);
+        console.log("[DEBUG isEditada] amostra de viagens (primeiras 3):", this._rawGps.slice(0, 3).map(r => ({
+            linha:         r.linha,
+            empresa:       r.empresa,
+            statusViagem:  r.statusViagem,
+            viagemEditada: r.viagemEditada,
+            _tipo:         typeof r.viagemEditada
+        })));
+
         // --- Passageiros (Bilhetagem) ---
         // Linhas ignoradas são excluídas da conciliação mas preservadas no modelo
-        const linhasIgnoradas = new Set(
-            (cfg.fontes.bilhetagem.linhasIgnoradas || []).map(l => String(l))
-        );
+        const linhasIgnoradas = Engine._buildLinhasIgnoradasSet(cfg.fontes.bilhetagem.linhasIgnoradas);
 
         const passageiros = this._rawPax.map((r, idx) => this._buildPassageiro(r, idx));
+
+        console.log("[DEBUG linhasIgnoradas] set:", [...linhasIgnoradas]);
+        const linhasNosPax = [...new Set(passageiros.map(p => p.linha))].sort();
+        console.log("[DEBUG linhasIgnoradas] linhas distintas na bilhetagem:", linhasNosPax);
+        const linhasMatch = linhasNosPax.filter(l => linhasIgnoradas.has(l));
+        console.log("[DEBUG linhasIgnoradas] linhas que batem no set:", linhasMatch);
+
         const [paxConciliaveis, paxIgnorados] = this._partition(
             passageiros,
             p => !linhasIgnoradas.has(p.linha)
         );
+        console.log("[DEBUG linhasIgnoradas] paxIgnorados:", paxIgnorados.length, "paxConciliaveis:", paxConciliaveis.length);
 
         // --- Índices para performance ---
         // paxPorVeiculo considera apenas as empresas selecionadas para conciliação
@@ -123,7 +139,8 @@ class Engine {
 
         const isOmissao  = cfg.statusOmissao.includes(status);
         const isExtra    = cfg.statusExtra.includes(status);
-        const isEditada  = String(r.viagemEditada).toLowerCase() === "sim";
+        const editadaRaw = String(r.viagemEditada || "").trim().toLowerCase();
+        const isEditada  = editadaRaw === "sim" || editadaRaw === "s" || editadaRaw === "1";
 
         // Omissões não têm horário real — usa planejado para fins de indexação temporal
         const hIni = isOmissao ? r.partidaPlanejada  : r.partidaReal;
@@ -420,6 +437,13 @@ class Engine {
             s => s.confianca >= APP_CONFIG.ui.confiancaAutoSelecionavel
         ).length;
 
+        // Passageiros sem atribuição E sem nenhuma sugestão pendente —
+        // estes exigem intervenção manual (etapa 4)
+        const paxComSugestao     = new Set(sugestoes.map(s => s.paxId));
+        const excecoesSemSugestao = paxScope.filter(
+            p => !p.assigned && !ignoradosIds.has(p.id) && !paxComSugestao.has(p.id)
+        ).length;
+
         session.resumo = {
             totalPax,
             atribuidos,
@@ -431,6 +455,7 @@ class Engine {
             editadas,
             sugeridosC,
             autoSelecionaveis,
+            excecoesSemSugestao,
             taxaConciliacao: totalPax > 0
                 ? Math.round((atribuidos / (totalPax - ignorados)) * 100)
                 : 0
@@ -666,5 +691,21 @@ class Engine {
         const a = [], b = [];
         for (const item of array) (pred(item) ? a : b).push(item);
         return [a, b];
+    }
+
+
+    // ==========================================================
+    // UTILITÁRIO PÚBLICO — Set de linhas ignoradas
+    // Inclui tanto o valor literal quanto a versão sem zeros à
+    // esquerda para linhas puramente numéricas (ex: "032" → "32"),
+    // pois PapaParse pode ler como inteiro em alguns exports.
+    // ==========================================================
+    static _buildLinhasIgnoradasSet(linhas = []) {
+        return new Set(
+            linhas.flatMap(l => {
+                const s = String(l).trim();
+                return /^\d+$/.test(s) ? [s, String(parseInt(s, 10))] : [s];
+            })
+        );
     }
 }

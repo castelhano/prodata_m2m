@@ -190,10 +190,13 @@ const UIController = {
         // Popula filtro de empresas
         this._popularFiltroEmpresas(session);
 
-        // Renderiza tabelas — exceções apenas de empresas já conciliadas
-        const conciliadas = new Set(session.empresasConciliadas || []);
+        // Renderiza tabelas — exceções apenas de empresas já conciliadas, sem linhas ignoradas
+        const conciliadas  = new Set(session.empresasConciliadas || []);
+        const ignoradosIds = new Set((session.paxIgnorados || []).map(p => p.id));
         this.renderExcecoes(session.passageiros.filter(p =>
-            !p.assigned && (conciliadas.size === 0 || conciliadas.has(p.empresa))
+            !p.assigned &&
+            !ignoradosIds.has(p.id) &&
+            (conciliadas.size === 0 || conciliadas.has(p.empresa))
         ));
         this.renderSugestoes(session.sugestoes);
         this.atualizarSeletorViagens();
@@ -404,6 +407,15 @@ const UIController = {
             return;
         }
 
+        console.log("[DEBUG isEditada] viagens carregadas no select:", viagens.map(v => ({
+            id:          v.id,
+            linha:       v.linha_base,
+            veiculo:     v.veiculo,
+            isEditada:   v.isEditada,
+            isOmissao:   v.isOmissao,
+            isExtra:     v.isExtra
+        })));
+
         select.innerHTML = "<option value=''>Selecione a viagem destino...</option>"
             + viagens.map(v => {
                 // Ícone de estado
@@ -464,9 +476,12 @@ const UIController = {
         const mIni = toMin(fIni);
         const mFim = toMin(fFim);
 
-        const conciliadas = new Set(AppState.session.empresasConciliadas || []);
+        const conciliadas  = new Set(AppState.session.empresasConciliadas || []);
+        const ignoradosIds = new Set((AppState.session.paxIgnorados || []).map(p => p.id));
         const orphaos = AppState.session.passageiros.filter(p =>
-            !p.assigned && (conciliadas.size === 0 || conciliadas.has(p.empresa))
+            !p.assigned &&
+            !ignoradosIds.has(p.id) &&
+            (conciliadas.size === 0 || conciliadas.has(p.empresa))
         );
 
         const filtrados = orphaos.filter(p => {
@@ -492,9 +507,12 @@ const UIController = {
         });
 
         if (AppState.session) {
-            const conciliadas = new Set(AppState.session.empresasConciliadas || []);
+            const conciliadas  = new Set(AppState.session.empresasConciliadas || []);
+            const ignoradosIds = new Set((AppState.session.paxIgnorados || []).map(p => p.id));
             this.renderExcecoes(AppState.session.passageiros.filter(p =>
-                !p.assigned && (conciliadas.size === 0 || conciliadas.has(p.empresa))
+                !p.assigned &&
+                !ignoradosIds.has(p.id) &&
+                (conciliadas.size === 0 || conciliadas.has(p.empresa))
             ));
         }
 
@@ -613,11 +631,16 @@ const UIController = {
     // ==========================================================
 
     _popularFiltroEmpresas(session) {
-        const select      = document.getElementById("filter-empresa");
-        const conciliadas = new Set(session.empresasConciliadas || []);
-        const empresas    = [...new Set(
+        const select       = document.getElementById("filter-empresa");
+        const conciliadas  = new Set(session.empresasConciliadas || []);
+        const ignoradosIds = new Set((session.paxIgnorados || []).map(p => p.id));
+        const empresas     = [...new Set(
             session.passageiros
-                .filter(p => !p.assigned && (conciliadas.size === 0 || conciliadas.has(p.empresa)))
+                .filter(p =>
+                    !p.assigned &&
+                    !ignoradosIds.has(p.id) &&
+                    (conciliadas.size === 0 || conciliadas.has(p.empresa))
+                )
                 .map(p => p.empresa).filter(Boolean)
         )].sort();
         select.innerHTML = "<option value=''>Empresa (Todas)</option>"

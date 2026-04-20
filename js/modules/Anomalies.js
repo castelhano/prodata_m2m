@@ -124,9 +124,7 @@ const Anomalies = {
             }
 
             // Penalidade proporcional por passageiros de linhas ignoradas na janela
-            const linhasIgnoradas = new Set(
-                (APP_CONFIG.fontes.bilhetagem.linhasIgnoradas || []).map(l => String(l))
-            );
+            const linhasIgnoradas = Engine._buildLinhasIgnoradasSet(APP_CONFIG.fontes.bilhetagem.linhasIgnoradas);
             const paxIgnoradosNaJanela = paxNaJanela.filter(p => linhasIgnoradas.has(p.linha));
             if (paxIgnoradosNaJanela.length > 0) {
                 const proporcao  = paxIgnoradosNaJanela.length / paxNaJanela.length;
@@ -314,14 +312,17 @@ const Anomalies = {
                 const hIni = v.isOmissao ? v.partidaPlanejada : v.partidaReal;
                 const hFim = v.isOmissao ? v.chegadaPlanejada : v.chegadaReal;
                 const editado = v.isEditada
-                    ? `<span style="color:var(--warning);">Sim</span>`
+                    ? `<span style="color:var(--warning); font-weight:600;">Sim</span>`
                     : `<span style="color:var(--text-3);">—</span>`;
                 const tipoBadge = v.isOmissao
                     ? `<span style="color:var(--danger); font-size:0.7rem;">[O]</span>`
                     : v.convertidaDeOmissao
                     ? `<span style="color:var(--success); font-size:0.7rem;">[C]</span>`
                     : "";
-                return `<tr>
+                const rowStyle = v.isEditada
+                    ? `background:rgba(245,158,11,0.08);`
+                    : "";
+                return `<tr style="${rowStyle}">
                     <td style="padding:4px 8px;">${v.linha_base} ${tipoBadge}</td>
                     <td style="padding:4px 8px;">${(hIni || "").substring(0, 5)}</td>
                     <td style="padding:4px 8px;">${(hFim || "").substring(0, 5)}</td>
@@ -388,9 +389,9 @@ const Anomalies = {
                                 Viagens carro inferido: <strong style="color:var(--text);">${s.veiculoInferido || "—"}</strong>
                             </div>
                             <div style="font-size:0.78rem; color:var(--text-3); margin-bottom:8px; font-family:var(--mono);">
-                                Total Pax não atribuídos: <strong style="color:var(--text-2);">${s.totalOrfaosVeiculo}</strong>
+                                Pax TT: <strong style="color:var(--text-2);">${s.totalOrfaosVeiculo}</strong>
                                 &nbsp;|&nbsp;
-                                Pax na janela: <strong style="color:var(--text-2);">${s.paxNaJanela.length}</strong>
+                                Pax Alvo: <strong style="color:var(--text-2);">${s.paxNaJanela.length}</strong>
                             </div>
                             ${viagensTableHtml}
                         </div>

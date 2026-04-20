@@ -69,17 +69,25 @@ class DataNormalizer {
     // ----------------------------------------------------------
     // Converte letras de coluna ("A", "B", "AA"...) em índices numéricos
     // "A" → 0, "B" → 1, "Z" → 25, "AA" → 26
+    // Aceita tanto string ("A") quanto objeto ({ coluna: "A", ... })
     // ----------------------------------------------------------
     _letrasParaIndices(colunas) {
         const map = {};
         for (const field in colunas) {
-            const letra = colunas[field].toUpperCase();
-            let n = 0;
-            for (let i = 0; i < letra.length; i++) {
-                n = n * 26 + letra.charCodeAt(i) - 64;
-            }
-            map[field] = n - 1;
+            const def   = colunas[field];
+            const letra = (typeof def === "object" ? def.coluna : def).toUpperCase();
+            map[field]  = DataNormalizer._letraParaIndice(letra);
         }
         return map;
+    }
+
+    // Converte uma letra de coluna em índice numérico (0-based)
+    static _letraParaIndice(letra) {
+        let n = 0;
+        const upper = String(letra).toUpperCase();
+        for (let i = 0; i < upper.length; i++) {
+            n = n * 26 + upper.charCodeAt(i) - 64;
+        }
+        return n - 1;
     }
 }

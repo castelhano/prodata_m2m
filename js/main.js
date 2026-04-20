@@ -27,6 +27,37 @@ const AppState = {
 
 
 // ----------------------------------------------------------
+// Validação básica do CSV — lê a primeira linha de dados
+// e verifica se os campos esperados estão nas colunas certas.
+// Lança Error com mensagem amigável se inválido.
+// ----------------------------------------------------------
+function _validarCSV(rawData, tipo) {
+    if (!rawData || rawData.length === 0) {
+        throw new Error("Arquivo vazio ou sem registros de dados.");
+    }
+
+    const cfg   = tipo === "gps" ? APP_CONFIG.fontes.gps : APP_CONFIG.fontes.bilhetagem;
+    const label = tipo === "gps" ? "GPS" : "bilhetagem";
+    const row   = rawData[0];
+
+    for (const [field, def] of Object.entries(cfg.colunas)) {
+        if (typeof def !== "object" || !def.regex) continue;
+
+        const idx = DataNormalizer._letraParaIndice(def.coluna);
+        const val = String(row[idx] ?? "").trim();
+
+        if (!def.regex.test(val)) {
+            throw new Error(
+                `Arquivo de ${label} inválido.\n` +
+                `Campo "${field}" (coluna ${def.coluna}) — esperado: ${def.descricao}\n` +
+                `Encontrado: "${val.substring(0, 60) || "(vazio)"}"`
+            );
+        }
+    }
+}
+
+
+// ----------------------------------------------------------
 // Carregamento de arquivos
 // Chamado pelo evento onchange dos inputs de arquivo
 // ----------------------------------------------------------
@@ -35,9 +66,13 @@ async function handleFileSelect(tipo, file) {
         UIController.setStatusBadge("Lendo arquivo...", "muted");
 
         if (tipo === "gps") {
-            AppState.rawGps = await Parser.readCSV(file);
+            const rawData = await Parser.readCSV(file);
+            _validarCSV(rawData, "gps");
+            AppState.rawGps = rawData;
         } else {
-            AppState.rawPax = await Parser.readCSV(file);
+            const rawData = await Parser.readCSV(file);
+            _validarCSV(rawData, "pax");
+            AppState.rawPax = rawData;
         }
 
         // Atualiza badge e exibe botão de processar quando ambos estiverem prontos

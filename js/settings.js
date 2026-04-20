@@ -16,7 +16,7 @@ const APP_CONFIG = {
 
         gps: {
             colunas: {
-                data:               "A",
+                data:             { coluna: "A", regex: /\d{2}\/\d{2}\/\d{4}/, descricao: "DD/MM/AAAA (data de operação)" },
                 linha:              "B",
                 veiculo:            "D",
                 motorista:          "E",
@@ -25,9 +25,9 @@ const APP_CONFIG = {
                 chegadaPlanejada:   "K",
                 chegadaReal:        "L",
                 statusViagem:       "U",
-                viagemEditada:      "V",
+                viagemEditada:      "W",
                 tabela:             "X",
-                empresa:            "Y"
+                empresa:          { coluna: "Y", regex: /.+/, descricao: "nome da empresa" }
             },
             // De como vem no arquivo → valor canônico usado no app
             normalizacao: {
@@ -48,8 +48,8 @@ const APP_CONFIG = {
 
         bilhetagem: {
             colunas: {
-                horario:    "F",
-                empresa:    "G",
+                horario:  { coluna: "F", regex: /\d{2}:\d{2}/, descricao: "HH:MM (horário de validação)" },
+                empresa:  { coluna: "G", regex: /.+/,           descricao: "nome da empresa" },
                 linha:      "H",
                 veiculo:    "I",
                 tipo:       "K",
