@@ -54,6 +54,24 @@ function _validarCSV(rawData, tipo) {
             );
         }
     }
+
+    // Detecta arquivo trocado: se o arquivo também passa o schema do OUTRO tipo,
+    // o usuário provavelmente selecionou o arquivo errado.
+    const outroTipo  = tipo === "gps" ? "bilhetagem" : "gps";
+    const outroCfg   = outroTipo === "gps" ? APP_CONFIG.fontes.gps : APP_CONFIG.fontes.bilhetagem;
+    const outroLabel = outroTipo === "gps" ? "GPS" : "bilhetagem";
+    const passaOutro = Object.entries(outroCfg.colunas).every(([, def]) => {
+        if (typeof def !== "object" || !def.regex) return true;
+        const idx = DataNormalizer._letraParaIndice(def.coluna);
+        const val = String(row[idx] ?? "").trim();
+        return def.regex.test(val);
+    });
+    if (passaOutro) {
+        throw new Error(
+            `Arquivo de ${label} inválido: o arquivo selecionado parece ser o de ${outroLabel}.\n` +
+            `Verifique se carregou o arquivo correto.`
+        );
+    }
 }
 
 
@@ -132,19 +150,34 @@ function executarProcessamento({ empresasPax, empresasConciliacao }) {
             const normGps = new DataNormalizer(APP_CONFIG.fontes.gps);
             const normPax = new DataNormalizer(APP_CONFIG.fontes.bilhetagem);
 
-            // GPS e pax carregados para todas as empresas do painel 1
-            const gpsLimpo = AppState.rawGps
-                .map(r => normGps.normalize(r))
-                .filter(r => empresasPax.includes(r.empresa));
+            // GPS: filtrado pelas empresas do corte (painel 1).
+            // Fallback: se a normalização GPS não mapeou a empresa (nome diferente entre arquivos),
+            // tenta o mapeamento da bilhetagem — cobre empresas com mesmo nome nos dois arquivos.
+            const paxEmpNorm    = APP_CONFIG.fontes.bilhetagem.normalizacao.empresa || {};
+            const empresasPaxSet = new Set(empresasPax);
 
+            const gpsLimpo = AppState.rawGps
+                .map(r => {
+                    const n = normGps.normalize(r);
+                    if (!empresasPaxSet.has(n.empresa) && paxEmpNorm[n.empresa]) {
+                        n.empresa = paxEmpNorm[n.empresa];
+                    }
+                    return n;
+                })
+                .filter(r => empresasPaxSet.has(r.empresa));
+
+            // Pax: apenas empresas do corte (painel 1)
             const paxLimpo = AppState.rawPax
                 ? AppState.rawPax
                     .map(r => normPax.normalize(r))
-                    .filter(r => empresasPax.includes(r.empresa))
+                    .filter(r => empresasPaxSet.has(r.empresa))
                 : [];
 
             const engine     = new Engine(gpsLimpo, paxLimpo);
             AppState.session = engine.process(empresasConciliacao);
+
+            const empresasNoSession = [...new Set(AppState.session.viagens.map(v => v.empresa).filter(Boolean))].sort();
+            UIController.showSeletorConciliacao(empresasNoSession, conciliarSobreSession);
 
             UIController.updateDashboard(AppState.session);
             UIController.hideLoader();

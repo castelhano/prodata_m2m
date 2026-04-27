@@ -24,16 +24,18 @@ const APP_CONFIG = {
                 partidaReal:        "H",
                 chegadaPlanejada:   "K",
                 chegadaReal:        "L",
-                statusViagem:       "U",
+                statusViagem:     { coluna: "U", regex: /^[1-9]$/,              descricao: "código de status da viagem (1 dígito numérico)" },
                 viagemEditada:      "W",
                 tabela:             "X",
-                empresa:          { coluna: "Y", regex: /.+/, descricao: "nome da empresa" }
+                empresa:          { coluna: "Y", regex: /.+/,                   descricao: "nome da empresa" }
             },
             // De como vem no arquivo → valor canônico usado no app
             normalizacao: {
                 empresa: {
-                    "Rápido Cuiabá":    "Rapido",
-                    "VPAR TRANSPORTES": "Vpar"
+                    "Rápido Cuiabá":        "Rapido",
+                    "VPAR TRANSPORTES":     "Vpar",
+                    "Caribus Transportes":  "Caribus",
+                    "Integração Transporte": "Integracao"
                 },
                 linha: {
                     // Adicionar exceções conforme identificado
@@ -48,8 +50,8 @@ const APP_CONFIG = {
 
         bilhetagem: {
             colunas: {
-                horario:  { coluna: "F", regex: /\d{2}:\d{2}/, descricao: "HH:MM (horário de validação)" },
-                empresa:  { coluna: "G", regex: /.+/,           descricao: "nome da empresa" },
+                horario:  { coluna: "F", regex: /\d{2}:\d{2}/,                                         descricao: "HH:MM (horário de validação)" },
+                empresa:  { coluna: "G", regex: /[A-Za-záàâãéèêíïóôõúüçÁÀÂÃÉÈÊÍÏÓÔÕÚÜÇ]/,       descricao: "nome da empresa (deve conter letras)" },
                 linha:      "H",
                 veiculo:    "I",
                 tipo:       "K",

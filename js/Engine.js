@@ -30,16 +30,18 @@ class Engine {
     // ----------------------------------------------------------
     process(empresasConciliacao = null) {
         const session = this._buildSession(empresasConciliacao);
+
+        // Define o escopo ANTES das etapas para que _etapaC filtre corretamente.
+        // Sem isso, _etapaC processa todos os passageiros (conciliadas = []) e pode
+        // gerar candidatos para empresas fora do escopo, tornando o processamento lento.
+        session.empresasConciliadas = empresasConciliacao
+            ? [...empresasConciliacao]
+            : [...new Set(session.viagens.map(v => v.empresa).filter(Boolean))];
+
         if (session.temGps && session.temBilhetagem) {
             this._etapaA(session);
             this._etapaB(session);
             this._etapaC(session);
-        }
-        // Registra quais empresas passaram pelo engine nesta execução
-        if (empresasConciliacao) {
-            session.empresasConciliadas = [...empresasConciliacao];
-        } else {
-            session.empresasConciliadas = [...new Set(session.viagens.map(v => v.empresa).filter(Boolean))];
         }
         this._calcularResumo(session);
         return session;
@@ -559,12 +561,12 @@ class Engine {
             viagensPorTabela:  engine._groupBy(session.viagens,       'tabela')
         };
 
+        // Define escopo antes das etapas (mesma razão do process())
+        session.empresasConciliadas = [...empresasConciliacao];
+
         engine._etapaA(session);
         engine._etapaB(session);
         engine._etapaC(session);
-
-        // Define escopo atual — reflete exatamente o que o usuário selecionou nesta rodada
-        session.empresasConciliadas = [...empresasConciliacao];
 
         engine._calcularResumo(session);
 
