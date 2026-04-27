@@ -61,14 +61,14 @@ const Anomalies = {
 
             const paxNaJanela = orphaos.filter(p => {
                 const delta = Math.abs(p.mHorario - mPlanejado);
-                return delta <= janela;
+                return p.empresa === omissao.empresa && delta <= janela;
             });
 
             if (paxNaJanela.length < cfg.minPassageirosSuspeitos) continue;
 
             // Viagens vizinhas da mesma tabela — ordenadas por horário
             const vizinhas = produtivas
-                .filter(v => v.tabela === omissao.tabela)
+                .filter(v => v.tabela === omissao.tabela && v.empresa === omissao.empresa)
                 .sort((a, b) => a.mInicio - b.mInicio);
             const anterior = vizinhas.filter(v => v.mFim   <= mPlanejado).pop();
             const proxima  = vizinhas.find(v  => v.mInicio >= mPlanejado);
