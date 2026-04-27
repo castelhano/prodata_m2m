@@ -430,6 +430,7 @@ class Engine {
 
     static confirmarSugestoes(session, sugestaoIds) {
         const ids = new Set(sugestaoIds);
+        const omissoesConvertidas = new Set();
 
         for (const s of session.sugestoes) {
             if (!ids.has(s.paxId)) continue;
@@ -452,9 +453,14 @@ class Engine {
                 viagem.editadaManualmente  = true;
                 viagem.partidaReal         = viagem.partidaPlanejada;
                 viagem.chegadaReal         = viagem.chegadaPlanejada;
-                // Veículo vem do passageiro (omissão não tem carro no GPS)
-                if (!viagem.veiculo) viagem.veiculo = pax.veiculo;
+                omissoesConvertidas.add(viagem.id);
             }
+        }
+
+        // Determina o veículo mais frequente entre todos os passageiros atribuídos
+        for (const tripId of omissoesConvertidas) {
+            const viagem = session.viagens.find(v => v.id === tripId);
+            if (viagem) viagem.veiculo = Engine._veiculoMaisFrequente(session, viagem.paxEfetivos);
         }
 
         // Remove sugestões confirmadas da lista de pendentes
@@ -476,6 +482,8 @@ class Engine {
     static atribuirManualmente(session, paxIds, tripId) {
         const viagem = session.viagens.find(v => v.id === tripId);
         if (!viagem) return session;
+
+        const eraOmissao = viagem.isOmissao;
 
         for (const paxId of paxIds) {
             const pax = session.passageiros.find(p => p.id === paxId);
@@ -501,8 +509,12 @@ class Engine {
                 viagem.editadaManualmente  = true;
                 viagem.partidaReal         = viagem.partidaPlanejada;
                 viagem.chegadaReal         = viagem.chegadaPlanejada;
-                if (!viagem.veiculo) viagem.veiculo = pax.veiculo;
             }
+        }
+
+        // Determina o veículo mais frequente entre todos os passageiros atribuídos
+        if (eraOmissao) {
+            viagem.veiculo = Engine._veiculoMaisFrequente(session, viagem.paxEfetivos);
         }
 
         // Remove sugestões pendentes dos passageiros que acabaram de ser atribuídos
@@ -603,6 +615,21 @@ class Engine {
     // ==========================================================
     // AUXILIARES INTERNOS
     // ==========================================================
+
+    // Retorna o veículo mais frequente entre uma lista de paxIds
+    static _veiculoMaisFrequente(session, paxEfetivosIds) {
+        const freq = {};
+        for (const paxId of paxEfetivosIds) {
+            const pax = session.passageiros.find(p => p.id === paxId);
+            if (!pax || !pax.veiculo) continue;
+            freq[pax.veiculo] = (freq[pax.veiculo] || 0) + 1;
+        }
+        let melhor = "", melhorCount = 0;
+        for (const [veiculo, count] of Object.entries(freq)) {
+            if (count > melhorCount) { melhorCount = count; melhor = veiculo; }
+        }
+        return melhor;
+    }
 
     // Retorna apenas viagens que recebem passageiros automaticamente (etapas A e B)
     _viagensConciliaveis(viagens = []) {

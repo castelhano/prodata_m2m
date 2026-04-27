@@ -442,9 +442,10 @@ const UIController = {
                 const pax  = String(v.paxEfetivos.length).padStart(3, " ");
 
                 const edit  = v.isEditada ? "[x]" : "[ ]";
+                const tab   = String(v.tabela || "").padStart(2, " ");
                 const label = `${icone} [${veic}] ${lin} | ${sen} | `
                     + `${(hIni || "").substring(0, 5)} às ${(hFim || "").substring(0, 5)} `
-                    + `${edit} (${pax} pax)`;
+                    + `${edit} [${tab}] (${pax} pax)`;
 
                 return `<option value="${v.id}">${label.replace(/ /g, "\u00A0")}</option>`;
             }).join("");
