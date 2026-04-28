@@ -360,7 +360,7 @@ body {
 
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: 10px;
 }
 
@@ -401,6 +401,20 @@ body {
     font-size: 22px;
     font-weight: 700;
     color: var(--text);
+    line-height: 1;
+}
+
+.stat-value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.stat-pct {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-3);
     line-height: 1;
 }
 
@@ -920,11 +934,24 @@ input[type="checkbox"]:checked::after {
             </div>
             <div class="stat-card c-green">
                 <div class="stat-label">Atribuídos</div>
-                <div class="stat-value" id="stat-assigned-pax">—</div>
+                <div class="stat-value-row">
+                    <span class="stat-value" id="stat-assigned-pax">—</span>
+                    <span class="stat-pct" id="stat-assigned-pct"></span>
+                </div>
             </div>
             <div class="stat-card c-yellow">
                 <div class="stat-label">Pendentes</div>
-                <div class="stat-value" id="stat-unassigned-pax">—</div>
+                <div class="stat-value-row">
+                    <span class="stat-value" id="stat-unassigned-pax">—</span>
+                    <span class="stat-pct" id="stat-unassigned-pct"></span>
+                </div>
+            </div>
+            <div class="stat-card c-red">
+                <div class="stat-label">Ignorados</div>
+                <div class="stat-value-row">
+                    <span class="stat-value" id="stat-ignorados">—</span>
+                    <span class="stat-pct" id="stat-ignorados-pct"></span>
+                </div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Viagens</div>

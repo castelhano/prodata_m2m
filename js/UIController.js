@@ -177,6 +177,14 @@ const UIController = {
         document.getElementById("stat-total-pax").innerText      = r.totalPax.toLocaleString();
         document.getElementById("stat-assigned-pax").innerText   = r.atribuidos.toLocaleString();
         document.getElementById("stat-unassigned-pax").innerText = r.naoAtribuidos.toLocaleString();
+
+        const pctAtribuidos    = r.totalPax > 0 ? Math.round(r.atribuidos    / r.totalPax * 100) : 0;
+        const pctNaoAtribuidos = r.totalPax > 0 ? Math.round(r.naoAtribuidos / r.totalPax * 100) : 0;
+        const pctIgnorados     = r.totalPax > 0 ? Math.round(r.ignorados     / r.totalPax * 100) : 0;
+        document.getElementById("stat-assigned-pct").innerText   = `${pctAtribuidos}%`;
+        document.getElementById("stat-unassigned-pct").innerText = `${pctNaoAtribuidos}%`;
+        document.getElementById("stat-ignorados").innerText      = r.ignorados.toLocaleString();
+        document.getElementById("stat-ignorados-pct").innerText  = pctIgnorados > 0 ? `${pctIgnorados}%` : "";
         document.getElementById("stat-total-trips").innerText    = r.totalViagens.toLocaleString();
         document.getElementById("stat-total-omissoes").innerText = r.omissoes.toLocaleString();
 
