@@ -90,7 +90,7 @@ const Storage = {
 
                 // Reconstrói paxIgnorados (removido do export para evitar duplicação)
                 const linhasIgn = new Set((APP_CONFIG.fontes.bilhetagem.linhasIgnoradas || []).map(l => String(l).trim()));
-                session.paxIgnorados = session.passageiros.filter(p => linhasIgn.has(p.linha));
+                session.paxIgnorados = session.passageiros.filter(p => linhasIgn.has(p.linha_consolidada));
 
                 // Reconstrói refs pax/viagem nas sugestões (removidas do export)
                 if (session.sugestoes?.length > 0) {

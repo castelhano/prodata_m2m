@@ -38,6 +38,9 @@ class DataNormalizer {
             clean.empresa = normEmpresa[clean.empresa];
         }
 
+        // Preserva valor bruto antes de normalizar
+        clean.linha_raw = clean.linha;
+
         // Normaliza linha → valor canônico
         const normLinha = this.config.normalizacao?.linha;
         if (normLinha && clean.linha && normLinha[clean.linha]) {

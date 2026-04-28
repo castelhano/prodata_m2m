@@ -74,7 +74,7 @@ class Engine {
 
         const [paxConciliaveis, paxIgnorados] = this._partition(
             passageiros,
-            p => !linhasIgnoradas.has(p.linha)
+            p => !linhasIgnoradas.has(p.linha_consolidada)
         );
 
         // --- Índices para performance ---
@@ -177,8 +177,9 @@ class Engine {
         return {
             // Identificação
             id:      `pax_${idx}`,
-            veiculo: r.veiculo  || "",
-            linha:   r.linha    || "",
+            veiculo:            r.veiculo           || "",
+            linha_raw:          r.linha_raw          || r.linha || "",
+            linha_consolidada:  r.linha_consolidada  || r.linha || "",
             empresa: r.empresa  || "",
             horario: r.horario  || "",
             tipo:    r.tipo     || "",
@@ -213,7 +214,7 @@ class Engine {
                 if (p.assigned) continue;
 
                 for (const v of viagens) {
-                    if (p.linha !== v.linha_base) continue;
+                    if (p.linha_consolidada !== v.linha_base) continue;
                     const pMin = this._ajustarPernoite(p.mHorario, v);
                     if (pMin >= v.mInicio && pMin <= v.mFim) {
                         this._atribuir(p, v, "etapa_a");
@@ -244,7 +245,7 @@ class Engine {
                 // Ordena candidatos por proximidade ao passageiro (menor delta primeiro)
                 // Resolve empate quando o passageiro cabe em duas janelas sobrepostas
                 const candidatos = viagens
-                    .filter(v => p.linha === v.linha_base)
+                    .filter(v => p.linha_consolidada === v.linha_base)
                     .map(v => {
                         const pMin = this._ajustarPernoite(p.mHorario, v);
                         const tol  = tolCfg[v.sentido] || tolCfg["UNICO"];
@@ -314,7 +315,7 @@ class Engine {
 
                 const pts = {
                     veiculo:  p.veiculo === v.veiculo           ? pesos.matchVeiculo   : 0,
-                    linha:    p.linha   === v.linha_base        ? pesos.matchLinha     : 0,
+                    linha:    p.linha_consolidada === v.linha_base ? pesos.matchLinha     : 0,
                     sentido:  (p.sentido && p.sentido === v.sentido) ? pesos.matchSentido : 0,
                     gapCurto: 0,
                     gapLongo: 0
@@ -443,9 +444,10 @@ class Engine {
             if (!pax || !viagem) continue;
 
             // Atribuição
-            pax.assigned         = true;
-            pax.tripId           = viagem.id;
-            pax.atribuicaoMetodo = "etapa_c";
+            pax.assigned          = true;
+            pax.tripId            = viagem.id;
+            pax.atribuicaoMetodo  = "etapa_c";
+            pax.linha_consolidada = viagem.linha_base;
             viagem.paxEfetivos.push(pax.id);
 
             // Se a viagem era omissão, converte para produtiva
@@ -499,9 +501,10 @@ class Engine {
                 }
             }
 
-            pax.assigned         = true;
-            pax.tripId           = viagem.id;
-            pax.atribuicaoMetodo = "manual";
+            pax.assigned          = true;
+            pax.tripId            = viagem.id;
+            pax.atribuicaoMetodo  = "manual";
+            pax.linha_consolidada = viagem.linha_base;
             viagem.paxEfetivos.push(pax.id);
 
             // Converte omissão se necessário
@@ -608,8 +611,10 @@ class Engine {
         for (const p of session.passageiros) {
             p.empresa = aplicar(p.empresa, cfgPax.empresa);
             p.veiculo = aplicar(p.veiculo, cfgPax.veiculo);
-            const linhaNorm = aplicar(p.linha, cfgPax.linha);
-            if (linhaNorm !== p.linha) derivarLinha(p, linhaNorm);
+            const linhaNorm = aplicar(p.linha_raw, cfgPax.linha);
+            if (linhaNorm !== p.linha_consolidada) {
+                p.linha_consolidada = linhaNorm;
+            }
         }
     }
 
@@ -644,10 +649,11 @@ class Engine {
     // Atribui passageiro a viagem e registra metadados
     // paxEfetivos guarda apenas o ID — objeto completo vive em session.passageiros
     _atribuir(pax, viagem, metodo, delta = null) {
-        pax.assigned         = true;
-        pax.tripId           = viagem.id;
-        pax.atribuicaoMetodo = metodo;
-        pax.deltaMinutos     = delta !== null ? Math.round(delta) : null;
+        pax.assigned          = true;
+        pax.tripId            = viagem.id;
+        pax.atribuicaoMetodo  = metodo;
+        pax.deltaMinutos      = delta !== null ? Math.round(delta) : null;
+        pax.linha_consolidada = viagem.linha_base;
         viagem.paxEfetivos.push(pax.id);
     }
 

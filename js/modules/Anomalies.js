@@ -91,7 +91,7 @@ const Anomalies = {
             }
 
             // Linha planejada bate com linha dos passageiros
-            const paxDaLinha = paxNaJanela.filter(p => p.linha === omissao.linha_base);
+            const paxDaLinha = paxNaJanela.filter(p => p.linha_consolidada === omissao.linha_base);
             if (paxDaLinha.length > 0) {
                 score += pesos.matchLinha;
                 criterios.push({ label: `Linha ${omissao.linha_base} compatível (${paxDaLinha.length} pax)`, pts: pesos.matchLinha });
@@ -128,7 +128,7 @@ const Anomalies = {
 
             // Penalidade proporcional por passageiros de linhas ignoradas na janela
             const linhasIgnoradas = new Set((APP_CONFIG.fontes.bilhetagem.linhasIgnoradas || []).map(l => String(l).trim()));
-            const paxIgnoradosNaJanela = paxNaJanela.filter(p => linhasIgnoradas.has(p.linha));
+            const paxIgnoradosNaJanela = paxNaJanela.filter(p => linhasIgnoradas.has(p.linha_consolidada));
             if (paxIgnoradosNaJanela.length > 0) {
                 const proporcao  = paxIgnoradosNaJanela.length / paxNaJanela.length;
                 const penalidade = Math.round(pesos.penalidadeLinhaIgnorada * proporcao);

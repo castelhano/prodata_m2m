@@ -231,7 +231,7 @@ const UIController = {
                 <td>${p.horario}</td>
                 <td style="color:var(--primary)">${p.empresa}</td>
                 <td>${p.veiculo}</td>
-                <td>${p.linha}</td>
+                <td>${p.linha_consolidada}</td>
                 <td>${p.tipo}</td>
             </tr>
         `).join("");
@@ -324,7 +324,7 @@ const UIController = {
                     <td>${s.pax.horario}</td>
                     <td style="color:var(--primary)">${s.pax.empresa}</td>
                     <td>${s.pax.veiculo}</td>
-                    <td>${s.pax.linha}</td>
+                    <td>${s.pax.linha_consolidada}</td>
                     <td>${motivoLabel[s.motivo] || s.motivo}</td>
                     <td>
                         <div style="display:flex; align-items:center; gap:6px;">
@@ -367,7 +367,7 @@ const UIController = {
         const filtradas = AppState.session.sugestoes.filter(s => {
             if (fEmp   && s.pax?.empresa !== fEmp)                        return false;
             if (fVeic  && !String(s.pax?.veiculo).includes(fVeic))        return false;
-            if (fLinha && !s.pax?.linha.toLowerCase().includes(fLinha))   return false;
+            if (fLinha && !s.pax?.linha_consolidada.toLowerCase().includes(fLinha))   return false;
             if (fConf === "alto"  && s.confianca < 70)                    return false;
             if (fConf === "medio" && (s.confianca < 45 || s.confianca >= 70)) return false;
             if (fConf === "baixo" && s.confianca >= 45)                   return false;
@@ -505,7 +505,7 @@ const UIController = {
         const filtrados = orphaos.filter(p => {
             if (fEmp   && p.empresa !== fEmp)                          return false;
             if (fVeic  && !String(p.veiculo).includes(fVeic))         return false;
-            if (fLinha && !p.linha.toLowerCase().includes(fLinha))     return false;
+            if (fLinha && !p.linha_consolidada.toLowerCase().includes(fLinha))     return false;
             if (mIni !== null && p.mHorario < mIni)                   return false;
             if (mFim !== null && p.mHorario > mFim)                   return false;
             return true;
@@ -683,7 +683,7 @@ const UIController = {
             const viagem = v ? `${v.linha_base} | ${v.veiculo} | ${(hIni||"").substring(0,5)} às ${(hFim||"").substring(0,5)}` : "";
             const c = s.criterios || {};
             linhas.push([
-                p?.horario, p?.empresa, p?.veiculo, p?.linha,
+                p?.horario, p?.empresa, p?.veiculo, p?.linha_consolidada,
                 s.motivo, s.confianca + "%", viagem,
                 c.veiculo ?? "", c.linha ?? "", c.sentido ?? "",
                 c.gapCurto ?? "", c.gapLongo ?? "", c.scoreRaw ?? ""
@@ -698,7 +698,7 @@ const UIController = {
             ["Horário", "Empresa", "Veículo", "Linha", "Tipo"]
         ];
         for (const p of lista) {
-            linhas.push([p.horario, p.empresa, p.veiculo, p.linha, p.tipo]);
+            linhas.push([p.horario, p.empresa, p.veiculo, p.linha_consolidada, p.tipo]);
         }
         this._downloadCSV(linhas, "excecoes");
     },
