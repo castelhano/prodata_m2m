@@ -710,26 +710,57 @@ const UIController = {
         const empresas = [...new Set(pax.map(p => p.empresa).filter(Boolean))].sort();
         const opts = empresas.map(e => `<option value="${e}">${e}</option>`).join("");
 
-        this.showModal("Resumo horário — exportar CSV", `
-            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                <label style="font-size:13px; color:var(--text-2);">Empresa:</label>
-                <select id="sel-empresa-resumo" class="input" style="min-width:200px;">
-                    <option value="">Todas as empresas</option>
-                    ${opts}
-                </select>
-                <button class="btn btn-primary" id="btn-exportar-resumo" style="height:34px;">
-                    Exportar CSV
-                </button>
+        this.showModal("Resumo horário — exportar", `
+            <div style="display:flex; flex-direction:column; gap:16px;">
+
+                <div>
+                    <div style="font-size:11px; font-family:var(--mono); color:var(--text-3);
+                                text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;">Formato</div>
+                    <div style="display:flex; gap:24px;">
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+                            <input type="radio" name="fmt-resumo" value="csv" checked> CSV
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+                            <input type="radio" name="fmt-resumo" value="json"> JSON
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <div style="font-size:11px; font-family:var(--mono); color:var(--text-3);
+                                text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;">Empresa</div>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <select id="sel-empresa-resumo" class="input" style="min-width:200px;">
+                            <option value="">Todas as empresas</option>
+                            ${opts}
+                        </select>
+                        <button class="btn btn-primary" id="btn-exportar-resumo" style="height:34px;">
+                            Exportar
+                        </button>
+                    </div>
+                </div>
+
+                <p style="font-size:12px; color:var(--text-3); margin:0;">
+                    <span id="desc-fmt-csv">Matriz de passageiros por linha × faixa horária (0–23 h). Inclui todos os passageiros independente do status de conciliação.</span>
+                    <span id="desc-fmt-json" style="display:none;">JSON com viagens e passageiros por linha × faixa horária, incluindo metadados da operação.</span>
+                </p>
+
             </div>
-            <p style="font-size:12px; color:var(--text-3); margin-top:14px; margin-bottom:0;">
-                Matriz de passageiros por linha × faixa horária (0–23 h).<br>
-                Inclui todos os passageiros independente do status de conciliação.
-            </p>
-        `, { maxWidth: "480px" });
+        `, { maxWidth: "500px" });
+
+        document.querySelectorAll('input[name="fmt-resumo"]').forEach(r => {
+            r.addEventListener("change", () => {
+                const isJson = r.value === "json" && r.checked;
+                document.getElementById("desc-fmt-csv").style.display  = isJson ? "none"   : "";
+                document.getElementById("desc-fmt-json").style.display = isJson ? ""       : "none";
+            });
+        });
 
         document.getElementById("btn-exportar-resumo").onclick = () => {
             const empresa = document.getElementById("sel-empresa-resumo").value;
-            this.exportCSVResumoHorario(empresa);
+            const formato = document.querySelector('input[name="fmt-resumo"]:checked')?.value || "csv";
+            if (formato === "json") this.exportJSONResumoHorario(empresa);
+            else                    this.exportCSVResumoHorario(empresa);
         };
     },
 
@@ -774,6 +805,84 @@ const UIController = {
         this._downloadCSV(rows, `resumo_horario_${sufixo}`);
     },
 
+    exportJSONResumoHorario(empresa) {
+        const session  = AppState.session;
+        const todoPax  = session?.passageiros || [];
+        const todoVia  = session?.viagens     || [];
+        const ignorIds = new Set((session?.paxIgnorados || []).map(p => p.id));
+
+        const paxF = empresa ? todoPax.filter(p => p.empresa === empresa) : todoPax;
+        const viaF = empresa ? todoVia.filter(v => v.empresa === empresa) : todoVia;
+
+        // Mapas linha × hora
+        const paxMapa = {};
+        for (const p of paxF) {
+            const linha = p.linha_consolidada || "—";
+            const hora  = Math.min(Math.max(parseInt((p.horario || "").split(" ")[1]?.split(":")[0] ?? "0", 10), 0), 23);
+            if (!paxMapa[linha]) paxMapa[linha] = {};
+            paxMapa[linha][hora] = (paxMapa[linha][hora] || 0) + 1;
+        }
+
+        const viaMapa = {};
+        for (const v of viaF) {
+            const linha = v.linha_base || "—";
+            const hora  = Math.min(Math.max(Math.floor(v.mInicio / 60), 0), 23);
+            if (!viaMapa[linha]) viaMapa[linha] = {};
+            viaMapa[linha][hora] = (viaMapa[linha][hora] || 0) + 1;
+        }
+
+        // Métricas da seleção
+        const atribuidos    = paxF.filter(p => p.assigned).length;
+        const ignorados     = paxF.filter(p => ignorIds.has(p.id)).length;
+        const naoAtribuidos = paxF.length - atribuidos - ignorados;
+        const taxaConciliacao = (paxF.length - ignorados) > 0
+            ? Math.round(atribuidos / (paxF.length - ignorados) * 100) : 0;
+
+        // Monta linhas unindo passageiros e viagens
+        const todasLinhas = [...new Set([...Object.keys(paxMapa), ...Object.keys(viaMapa)])].sort();
+
+        const linhasJSON = todasLinhas.map(linha => {
+            const faixas = [];
+            for (let h = 0; h < 24; h++) {
+                const p = paxMapa[linha]?.[h] || 0;
+                const v = viaMapa[linha]?.[h] || 0;
+                if (p > 0 || v > 0) faixas.push({ hora: h, passageiros: p, viagens: v });
+            }
+            return {
+                linha,
+                total: {
+                    passageiros: faixas.reduce((s, f) => s + f.passageiros, 0),
+                    viagens:     faixas.reduce((s, f) => s + f.viagens,     0),
+                },
+                faixas,
+            };
+        });
+
+        const resultado = {
+            consulta: {
+                dataOperacao:    session.dataOperacao || "",
+                empresa:         empresa || "Todas as empresas",
+                geradoEm:        new Date().toISOString(),
+                totalPassageiros: paxF.length,
+                totalViagens:    viaF.length,
+                atribuidos,
+                naoAtribuidos,
+                ignorados,
+                taxaConciliacao: `${taxaConciliacao}%`,
+            },
+            linhas: linhasJSON,
+        };
+
+        const json = JSON.stringify(resultado, null, 2);
+        const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        const data = new Date().toISOString().split("T")[0].replace(/-/g, "_");
+        const sufixo = empresa ? empresa.replace(/\s+/g, "_") : "todas";
+        a.href = url; a.download = `resumo_horario_${sufixo}_${data}.json`; a.click();
+        URL.revokeObjectURL(url);
+    },
+
     _downloadCSV(linhas, prefixo) {
         const escape = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
         const csv = linhas.map(row => row.map(escape).join(";")).join("\r\n");
@@ -784,6 +893,25 @@ const UIController = {
         a.href = url; a.download = `${prefixo}_${data}.csv`; a.click();
         URL.revokeObjectURL(url);
     },
+    
+    // arquivos: [{ nome: "arquivo", linhas: [[...], ...] }, ...]
+    async _downloadZIP(arquivos, nomeZip) {
+        const escape = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+        const data   = new Date().toISOString().split("T")[0].replace(/-/g, "_");
+        const zip    = new JSZip();
+        
+        for (const arq of arquivos) {
+            const csv = arq.linhas.map(row => row.map(escape).join(";")).join("\r\n");
+            zip.file(`${arq.nome}_${data}.csv`, "\uFEFF" + csv);
+        }
+        
+        const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href = url; a.download = `${nomeZip}_${data}.zip`; a.click();
+        URL.revokeObjectURL(url);
+    },
+
 
     // Pad de string para alinhamento monospaced no seletor de viagens
     _pad(str, length) {
