@@ -703,6 +703,77 @@ const UIController = {
         this._downloadCSV(linhas, "excecoes");
     },
 
+    abrirResumoHorario() {
+        const pax = AppState.session?.passageiros;
+        if (!pax?.length) { alert("Nenhum dado carregado."); return; }
+
+        const empresas = [...new Set(pax.map(p => p.empresa).filter(Boolean))].sort();
+        const opts = empresas.map(e => `<option value="${e}">${e}</option>`).join("");
+
+        this.showModal("Resumo horário — exportar CSV", `
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <label style="font-size:13px; color:var(--text-2);">Empresa:</label>
+                <select id="sel-empresa-resumo" class="input" style="min-width:200px;">
+                    <option value="">Todas as empresas</option>
+                    ${opts}
+                </select>
+                <button class="btn btn-primary" id="btn-exportar-resumo" style="height:34px;">
+                    Exportar CSV
+                </button>
+            </div>
+            <p style="font-size:12px; color:var(--text-3); margin-top:14px; margin-bottom:0;">
+                Matriz de passageiros por linha × faixa horária (0–23 h).<br>
+                Inclui todos os passageiros independente do status de conciliação.
+            </p>
+        `, { maxWidth: "480px" });
+
+        document.getElementById("btn-exportar-resumo").onclick = () => {
+            const empresa = document.getElementById("sel-empresa-resumo").value;
+            this.exportCSVResumoHorario(empresa);
+        };
+    },
+
+    exportCSVResumoHorario(empresa) {
+        const todos = AppState.session?.passageiros || [];
+        const lista = empresa ? todos.filter(p => p.empresa === empresa) : todos;
+
+        // Acumula contagens: mapa[linha][hora] = count
+        const mapa = {};
+        for (const p of lista) {
+            const linha = p.linha_consolidada || "—";
+            const hora  = parseInt((p.horario || "").split(" ")[1]?.split(":")[0] ?? "0", 10);
+            if (isNaN(hora)) continue;
+            const h = Math.min(Math.max(hora, 0), 23);
+            if (!mapa[linha]) mapa[linha] = {};
+            mapa[linha][h] = (mapa[linha][h] || 0) + 1;
+        }
+
+        const horas  = Array.from({ length: 24 }, (_, i) => i);
+        const linhas = Object.keys(mapa).sort();
+
+        // Cabeçalho
+        const rows = [["Linha", ...horas, "Total"]];
+
+        // Totais por hora (linha de rodapé)
+        const totHora = horas.map(() => 0);
+
+        for (const linha of linhas) {
+            const counts = horas.map((h, i) => {
+                const v = mapa[linha][h] || 0;
+                totHora[i] += v;
+                return v;
+            });
+            const tot = counts.reduce((s, v) => s + v, 0);
+            rows.push([linha, ...counts, tot]);
+        }
+
+        // Linha de total geral
+        rows.push(["TOTAL", ...totHora, totHora.reduce((s, v) => s + v, 0)]);
+
+        const sufixo = empresa ? empresa.replace(/\s+/g, "_") : "todas";
+        this._downloadCSV(rows, `resumo_horario_${sufixo}`);
+    },
+
     _downloadCSV(linhas, prefixo) {
         const escape = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
         const csv = linhas.map(row => row.map(escape).join(";")).join("\r\n");
