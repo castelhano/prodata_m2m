@@ -192,7 +192,8 @@ class Engine {
             assigned:          false,
             tripId:            null,
             atribuicaoMetodo:  null,  // "etapa_a" | "etapa_b" | "etapa_c" | "manual"
-            deltaMinutos:      null   // distância em minutos até o início da viagem atribuída
+            deltaMinutos:      null,  // distância em minutos até o início da viagem atribuída
+            sentido:           null   // preenchido na atribuição com o sentido da viagem
         };
     }
 
@@ -448,6 +449,7 @@ class Engine {
             pax.tripId            = viagem.id;
             pax.atribuicaoMetodo  = "etapa_c";
             pax.linha_consolidada = viagem.linha_base;
+            pax.sentido           = viagem.sentido || "UNICO";
             viagem.paxEfetivos.push(pax.id);
 
             // Se a viagem era omissão, converte para produtiva
@@ -505,6 +507,7 @@ class Engine {
             pax.tripId            = viagem.id;
             pax.atribuicaoMetodo  = "manual";
             pax.linha_consolidada = viagem.linha_base;
+            pax.sentido           = viagem.sentido || "UNICO";
             viagem.paxEfetivos.push(pax.id);
 
             // Converte omissão se necessário
@@ -654,6 +657,7 @@ class Engine {
         pax.atribuicaoMetodo  = metodo;
         pax.deltaMinutos      = delta !== null ? Math.round(delta) : null;
         pax.linha_consolidada = viagem.linha_base;
+        pax.sentido           = viagem.sentido || "UNICO";
         viagem.paxEfetivos.push(pax.id);
     }
 

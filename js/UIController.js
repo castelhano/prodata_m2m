@@ -767,42 +767,48 @@ const UIController = {
     exportCSVResumoHorario(empresa) {
         const todos = AppState.session?.passageiros || [];
         const lista = empresa ? todos.filter(p => p.empresa === empresa) : todos;
+        const horas = Array.from({ length: 24 }, (_, i) => i);
 
-        // Acumula contagens: mapa[linha][hora] = count
-        const mapa = {};
+        // Agrupa passageiros por sentido (null → "SEM_SENTIDO")
+        const grupos = {};
         for (const p of lista) {
-            const linha = p.linha_consolidada || "—";
-            const hora  = parseInt((p.horario || "").split(" ")[1]?.split(":")[0] ?? "0", 10);
-            if (isNaN(hora)) continue;
-            const h = Math.min(Math.max(hora, 0), 23);
-            if (!mapa[linha]) mapa[linha] = {};
-            mapa[linha][h] = (mapa[linha][h] || 0) + 1;
+            const s = p.sentido || "SEM_SENTIDO";
+            if (!grupos[s]) grupos[s] = [];
+            grupos[s].push(p);
         }
 
-        const horas  = Array.from({ length: 24 }, (_, i) => i);
-        const linhas = Object.keys(mapa).sort();
+        const gerarRows = paxList => {
+            const mapa = {};
+            for (const p of paxList) {
+                const linha = p.linha_consolidada || "—";
+                const hora  = parseInt((p.horario || "").split(" ")[1]?.split(":")[0] ?? "0", 10);
+                if (isNaN(hora)) continue;
+                const h = Math.min(Math.max(hora, 0), 23);
+                if (!mapa[linha]) mapa[linha] = {};
+                mapa[linha][h] = (mapa[linha][h] || 0) + 1;
+            }
+            const linhas  = Object.keys(mapa).sort();
+            const rows    = [["Linha", ...horas, "Total"]];
+            const totHora = horas.map(() => 0);
+            for (const linha of linhas) {
+                const counts = horas.map((h, i) => { const v = mapa[linha][h] || 0; totHora[i] += v; return v; });
+                rows.push([linha, ...counts, counts.reduce((s, v) => s + v, 0)]);
+            }
+            rows.push(["TOTAL", ...totHora, totHora.reduce((s, v) => s + v, 0)]);
+            return rows;
+        };
 
-        // Cabeçalho
-        const rows = [["Linha", ...horas, "Total"]];
+        const sufixo   = empresa ? empresa.replace(/\s+/g, "_") : "todas";
+        const sentidos = Object.keys(grupos).sort();
 
-        // Totais por hora (linha de rodapé)
-        const totHora = horas.map(() => 0);
-
-        for (const linha of linhas) {
-            const counts = horas.map((h, i) => {
-                const v = mapa[linha][h] || 0;
-                totHora[i] += v;
-                return v;
-            });
-            const tot = counts.reduce((s, v) => s + v, 0);
-            rows.push([linha, ...counts, tot]);
+        if (sentidos.length === 1) {
+            this._downloadCSV(gerarRows(grupos[sentidos[0]]), `resumo_horario_${sufixo}_${sentidos[0]}`);
+        } else {
+            this._downloadZIP(
+                sentidos.map(s => ({ nome: `resumo_horario_${sufixo}_${s}`, linhas: gerarRows(grupos[s]) })),
+                `resumo_horario_${sufixo}`
+            );
         }
-
-        // Linha de total geral
-        rows.push(["TOTAL", ...totHora, totHora.reduce((s, v) => s + v, 0)]);
-
-        const sufixo = empresa ? empresa.replace(/\s+/g, "_") : "todas";
-        this._downloadCSV(rows, `resumo_horario_${sufixo}`);
     },
 
     exportJSONResumoHorario(empresa) {
@@ -814,61 +820,75 @@ const UIController = {
         const paxF = empresa ? todoPax.filter(p => p.empresa === empresa) : todoPax;
         const viaF = empresa ? todoVia.filter(v => v.empresa === empresa) : todoVia;
 
-        // Mapas linha × hora
+        // paxMapa[linha][sentido][hora] = count  (sentido null → "SEM_SENTIDO")
         const paxMapa = {};
         for (const p of paxF) {
-            const linha = p.linha_consolidada || "—";
-            const hora  = Math.min(Math.max(parseInt((p.horario || "").split(" ")[1]?.split(":")[0] ?? "0", 10), 0), 23);
-            if (!paxMapa[linha]) paxMapa[linha] = {};
-            paxMapa[linha][hora] = (paxMapa[linha][hora] || 0) + 1;
+            const linha   = p.linha_consolidada || "—";
+            const sentido = p.sentido || "SEM_SENTIDO";
+            const hora    = Math.min(Math.max(parseInt((p.horario || "").split(" ")[1]?.split(":")[0] ?? "0", 10), 0), 23);
+            if (!paxMapa[linha])          paxMapa[linha] = {};
+            if (!paxMapa[linha][sentido]) paxMapa[linha][sentido] = {};
+            paxMapa[linha][sentido][hora] = (paxMapa[linha][sentido][hora] || 0) + 1;
         }
 
+        // viaMapa[linha][sentido][hora] = count
         const viaMapa = {};
         for (const v of viaF) {
-            const linha = v.linha_base || "—";
-            const hora  = Math.min(Math.max(Math.floor(v.mInicio / 60), 0), 23);
-            if (!viaMapa[linha]) viaMapa[linha] = {};
-            viaMapa[linha][hora] = (viaMapa[linha][hora] || 0) + 1;
+            const linha   = v.linha_base || "—";
+            const sentido = v.sentido    || "UNICO";
+            const hora    = Math.min(Math.max(Math.floor(v.mInicio / 60), 0), 23);
+            if (!viaMapa[linha])          viaMapa[linha] = {};
+            if (!viaMapa[linha][sentido]) viaMapa[linha][sentido] = {};
+            viaMapa[linha][sentido][hora] = (viaMapa[linha][sentido][hora] || 0) + 1;
         }
 
         // Métricas da seleção
-        const atribuidos    = paxF.filter(p => p.assigned).length;
-        const ignorados     = paxF.filter(p => ignorIds.has(p.id)).length;
-        const naoAtribuidos = paxF.length - atribuidos - ignorados;
+        const atribuidos      = paxF.filter(p => p.assigned).length;
+        const ignorados       = paxF.filter(p => ignorIds.has(p.id)).length;
+        const naoAtribuidos   = paxF.length - atribuidos - ignorados;
         const taxaConciliacao = (paxF.length - ignorados) > 0
             ? Math.round(atribuidos / (paxF.length - ignorados) * 100) : 0;
 
-        // Monta linhas unindo passageiros e viagens
+        // Monta entradas planas: uma por (linha, sentido)
         const todasLinhas = [...new Set([...Object.keys(paxMapa), ...Object.keys(viaMapa)])].sort();
+        const linhasJSON  = [];
 
-        const linhasJSON = todasLinhas.map(linha => {
-            const faixas = [];
-            for (let h = 0; h < 24; h++) {
-                const p = paxMapa[linha]?.[h] || 0;
-                const v = viaMapa[linha]?.[h] || 0;
-                if (p > 0 || v > 0) faixas.push({ hora: h, passageiros: p, viagens: v });
+        for (const linha of todasLinhas) {
+            const todosSentidos = [...new Set([
+                ...Object.keys(paxMapa[linha] || {}),
+                ...Object.keys(viaMapa[linha] || {}),
+            ])].sort();
+
+            for (const sentido of todosSentidos) {
+                const faixas = [];
+                for (let h = 0; h < 24; h++) {
+                    const p = paxMapa[linha]?.[sentido]?.[h] || 0;
+                    const v = viaMapa[linha]?.[sentido]?.[h] || 0;
+                    if (p > 0 || v > 0) faixas.push({ hora: h, passageiros: p, viagens: v });
+                }
+                linhasJSON.push({
+                    linha,
+                    sentido,
+                    total: {
+                        passageiros: faixas.reduce((s, f) => s + f.passageiros, 0),
+                        viagens:     faixas.reduce((s, f) => s + f.viagens,     0),
+                    },
+                    faixas,
+                });
             }
-            return {
-                linha,
-                total: {
-                    passageiros: faixas.reduce((s, f) => s + f.passageiros, 0),
-                    viagens:     faixas.reduce((s, f) => s + f.viagens,     0),
-                },
-                faixas,
-            };
-        });
+        }
 
         const resultado = {
             consulta: {
-                dataOperacao:    session.dataOperacao || "",
-                empresa:         empresa || "Todas as empresas",
-                geradoEm:        new Date().toISOString(),
+                dataOperacao:     session.dataOperacao || "",
+                empresa:          empresa || "Todas as empresas",
+                geradoEm:         new Date().toISOString(),
                 totalPassageiros: paxF.length,
-                totalViagens:    viaF.length,
+                totalViagens:     viaF.length,
                 atribuidos,
                 naoAtribuidos,
                 ignorados,
-                taxaConciliacao: `${taxaConciliacao}%`,
+                taxaConciliacao:  `${taxaConciliacao}%`,
             },
             linhas: linhasJSON,
         };
@@ -881,6 +901,120 @@ const UIController = {
         const sufixo = empresa ? empresa.replace(/\s+/g, "_") : "todas";
         a.href = url; a.download = `resumo_horario_${sufixo}_${data}.json`; a.click();
         URL.revokeObjectURL(url);
+    },
+
+    // ==========================================================
+    // OFERTA × DEMANDA
+    // ==========================================================
+
+    async abrirOfertaDemanda(fileList) {
+        const lerArquivo = f => new Promise((res, rej) => {
+            const r = new FileReader();
+            r.onload  = e => { try { res(JSON.parse(e.target.result)); } catch { rej(new Error(`JSON inválido: ${f.name}`)); } };
+            r.onerror = () => rej(new Error(`Erro ao ler: ${f.name}`));
+            r.readAsText(f, "utf-8");
+        });
+
+        let dados;
+        try {
+            dados = await Promise.all(Array.from(fileList).map(lerArquivo));
+        } catch (err) {
+            alert(err.message);
+            return;
+        }
+
+        const linhasSet = new Set();
+        for (const d of dados)
+            for (const l of (d.linhas || [])) linhasSet.add(l.linha);
+
+        const linhas = [...linhasSet].sort();
+        if (!linhas.length) { alert("Nenhuma linha encontrada nos arquivos."); return; }
+
+        const optsLinhas = linhas.map(l => `<option value="${l}">${l}</option>`).join("");
+
+        this.showModal("Oferta × Demanda", `
+            <div style="display:flex; flex-direction:column; gap:16px;">
+
+                <div>
+                    <div style="font-size:11px; font-family:var(--mono); color:var(--text-3);
+                                text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;">Tipo de análise</div>
+                    <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px; opacity:.4; cursor:not-allowed;">
+                            <input type="radio" name="tipo-od" value="geral" disabled>
+                            Geral
+                            <span style="font-size:10px; font-family:var(--mono); color:var(--text-3);">(em breve)</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                            <input type="radio" name="tipo-od" value="sentido" checked>
+                            Por sentido
+                        </label>
+                        <select id="sel-linha-od" class="input" style="min-width:160px;">
+                            ${optsLinhas}
+                        </select>
+                        <button class="btn btn-primary" id="btn-gerar-od" style="height:34px;">
+                            Gerar CSV
+                        </button>
+                    </div>
+                </div>
+
+                <p style="font-size:12px; color:var(--text-3); margin:0;">
+                    ${dados.length} arquivo${dados.length > 1 ? "s" : ""} carregado${dados.length > 1 ? "s" : ""}
+                    (${dados.length} dia${dados.length > 1 ? "s" : ""}).
+                    A média de oferta (viagens) e demanda (passageiros) será calculada por faixa horária para a linha selecionada.
+                </p>
+
+            </div>
+        `, { maxWidth: "580px" });
+
+        document.getElementById("btn-gerar-od").onclick = () => {
+            const linha = document.getElementById("sel-linha-od").value;
+            this.gerarOfertaDemanda(dados, linha);
+        };
+    },
+
+    gerarOfertaDemanda(dados, linha) {
+        const n     = dados.length;
+        const horas = Array.from({ length: 24 }, (_, i) => i);
+        const slug  = linha.replace(/[^a-zA-Z0-9]/g, "_");
+
+        // Coleta todos os sentidos disponíveis para esta linha nos arquivos
+        const sentidosSet = new Set();
+        for (const d of dados)
+            for (const e of (d.linhas || []))
+                if (e.linha === linha) sentidosSet.add(e.sentido || "SEM_SENTIDO");
+
+        const sentidos = [...sentidosSet].sort();
+
+        const arquivos = sentidos.map(sentido => {
+            const oferta  = new Array(24).fill(0);
+            const demanda = new Array(24).fill(0);
+
+            for (const d of dados) {
+                const entry = (d.linhas || []).find(l => l.linha === linha && (l.sentido || "SEM_SENTIDO") === sentido);
+                if (!entry) continue;
+                for (const f of (entry.faixas || [])) {
+                    if (f.hora >= 0 && f.hora < 24) {
+                        oferta[f.hora]  += f.viagens     || 0;
+                        demanda[f.hora] += f.passageiros || 0;
+                    }
+                }
+            }
+
+            return {
+                nome:   `oferta_demanda_${slug}_${sentido}`,
+                linhas: [
+                    ["",        ...horas],
+                    ["Oferta",  ...oferta.map(v  => Math.round(v  / n))],
+                    ["Demanda", ...demanda.map(v => Math.round(v  / n))],
+                ],
+            };
+        });
+
+        if (arquivos.length === 1) {
+            this._downloadCSV(arquivos[0].linhas, arquivos[0].nome);
+        } else {
+            this._downloadZIP(arquivos, `oferta_demanda_${slug}`);
+        }
     },
 
     _downloadCSV(linhas, prefixo) {

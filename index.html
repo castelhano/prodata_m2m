@@ -183,7 +183,7 @@ body {
 ============================================================ */
 #section-import .drop-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
 }
 
@@ -867,6 +867,14 @@ input[type="checkbox"]:checked::after {
                 <p>.json — sessão salva</p>
             </div>
 
+            <!-- Oferta x Demanda -->
+            <div class="drop-zone" id="drop-oferta-demanda">
+                <input type="file" id="input-oferta-demanda" class="hidden" accept=".json" multiple>
+                <i data-lucide="bar-chart-2"></i>
+                <strong>Oferta × Demanda</strong>
+                <p>.json — múltiplos resumos</p>
+            </div>
+
         </div>
     </section>
 
@@ -1279,6 +1287,19 @@ setupDropZone('drop-json', 'input-json',  null);
 
 document.getElementById('input-json').addEventListener('change', e => {
     Storage.importJSON(e.target.files[0]);
+});
+
+const _dropOD    = document.getElementById('drop-oferta-demanda');
+const _inputOD   = document.getElementById('input-oferta-demanda');
+_dropOD.addEventListener('click', () => _inputOD.click());
+_inputOD.addEventListener('click', e => e.stopPropagation());
+_inputOD.addEventListener('change', e => {
+    const files = e.target.files;
+    if (!files.length) return;
+    _dropOD.classList.add('loaded');
+    _dropOD.querySelector('p').innerText =
+        files.length === 1 ? files[0].name : `${files.length} arquivos selecionados`;
+    UIController.abrirOfertaDemanda(files);
 });
 
 // ============================================================
