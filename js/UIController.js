@@ -935,36 +935,24 @@ const UIController = {
         this.showModal("Oferta × Demanda", `
             <div style="display:flex; flex-direction:column; gap:16px;">
 
-                <div>
-                    <div style="font-size:11px; font-family:var(--mono); color:var(--text-3);
-                                text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;">Tipo de análise</div>
-                    <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px; opacity:.4; cursor:not-allowed;">
-                            <input type="radio" name="tipo-od" value="geral" disabled>
-                            Geral
-                            <span style="font-size:10px; font-family:var(--mono); color:var(--text-3);">(em breve)</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
-                            <input type="radio" name="tipo-od" value="sentido" checked>
-                            Por sentido
-                        </label>
-                        <select id="sel-linha-od" class="input" style="min-width:160px;">
-                            ${optsLinhas}
-                        </select>
-                        <button class="btn btn-primary" id="btn-gerar-od" style="height:34px;">
-                            Gerar CSV
-                        </button>
-                    </div>
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <select id="sel-linha-od" class="input" style="min-width:160px;">
+                        <option value="">Todas as linhas</option>
+                        ${optsLinhas}
+                    </select>
+                    <button class="btn btn-primary" id="btn-gerar-od" style="height:34px;">
+                        Gerar CSV
+                    </button>
                 </div>
 
                 <p style="font-size:12px; color:var(--text-3); margin:0;">
                     ${dados.length} arquivo${dados.length > 1 ? "s" : ""} carregado${dados.length > 1 ? "s" : ""}
                     (${dados.length} dia${dados.length > 1 ? "s" : ""}).
-                    A média de oferta (viagens) e demanda (passageiros) será calculada por faixa horária para a linha selecionada.
+                    Selecione uma linha para exportar por sentido, ou deixe em <em>Todas as linhas</em> para gerar 4 arquivos (demanda_ida, demanda_volta, oferta_ida, oferta_volta) em ZIP.
                 </p>
 
             </div>
-        `, { maxWidth: "580px" });
+        `, { maxWidth: "520px" });
 
         document.getElementById("btn-gerar-od").onclick = () => {
             const linha = document.getElementById("sel-linha-od").value;
@@ -973,11 +961,15 @@ const UIController = {
     },
 
     gerarOfertaDemanda(dados, linha) {
+        if (linha === "") {
+            this._gerarOfertaDemandaTodas(dados);
+            return;
+        }
+
         const n     = dados.length;
         const horas = Array.from({ length: 24 }, (_, i) => i);
         const slug  = linha.replace(/[^a-zA-Z0-9]/g, "_");
 
-        // Coleta todos os sentidos disponíveis para esta linha nos arquivos
         const sentidosSet = new Set();
         for (const d of dados)
             for (const e of (d.linhas || []))
@@ -1015,6 +1007,46 @@ const UIController = {
         } else {
             this._downloadZIP(arquivos, `oferta_demanda_${slug}`);
         }
+    },
+
+    _gerarOfertaDemandaTodas(dados) {
+        const n     = dados.length;
+        const horas = Array.from({ length: 24 }, (_, i) => i);
+
+        const linhasSet = new Set();
+        for (const d of dados)
+            for (const l of (d.linhas || [])) linhasSet.add(l.linha);
+        const linhas = [...linhasSet].sort();
+
+        const arquivos = [];
+
+        for (const sentido of ["IDA", "VOLTA"]) {
+            for (const metrica of ["demanda", "oferta"]) {
+                const rows = [["Linha", ...horas]];
+
+                for (const linha of linhas) {
+                    const valores = new Array(24).fill(0);
+                    let temDados  = false;
+
+                    for (const d of dados) {
+                        const entry = (d.linhas || []).find(l => l.linha === linha && (l.sentido || "SEM_SENTIDO") === sentido);
+                        if (!entry) continue;
+                        temDados = true;
+                        for (const f of (entry.faixas || [])) {
+                            if (f.hora >= 0 && f.hora < 24) {
+                                valores[f.hora] += metrica === "oferta" ? (f.viagens || 0) : (f.passageiros || 0);
+                            }
+                        }
+                    }
+
+                    if (temDados) rows.push([linha, ...valores.map(v => Math.round(v / n))]);
+                }
+
+                arquivos.push({ nome: `${metrica}_${sentido.toLowerCase()}`, linhas: rows });
+            }
+        }
+
+        this._downloadZIP(arquivos, "oferta_demanda_todas");
     },
 
     _downloadCSV(linhas, prefixo) {
