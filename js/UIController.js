@@ -765,7 +765,8 @@ const UIController = {
     },
 
     exportCSVResumoHorario(empresa) {
-        const todos = AppState.session?.passageiros || [];
+        const session = AppState.session;
+        const todos = session?.passageiros || [];
         const lista = empresa ? todos.filter(p => p.empresa === empresa) : todos;
         const horas = Array.from({ length: 24 }, (_, i) => i);
 
@@ -798,15 +799,18 @@ const UIController = {
             return rows;
         };
 
-        const sufixo   = empresa ? empresa.replace(/\s+/g, "_") : "todas";
         const sentidos = Object.keys(grupos).sort();
 
+        const dataRef     = this._parseDataRefParaNome(session?.dataOperacao);
+        const empresaCods = this._empresasAbbr(lista);
+        const base        = `SUMM_${dataRef}_${empresaCods}`;
+
         if (sentidos.length === 1) {
-            this._downloadCSV(gerarRows(grupos[sentidos[0]]), `resumo_horario_${sufixo}_${sentidos[0]}`);
+            this._downloadCSV(gerarRows(grupos[sentidos[0]]), null, base);
         } else {
             this._downloadZIP(
-                sentidos.map(s => ({ nome: `resumo_horario_${sufixo}_${s}`, linhas: gerarRows(grupos[s]) })),
-                `resumo_horario_${sufixo}`
+                sentidos.map(s => ({ nome: null, nomeCompleto: `${base}_${s}`, linhas: gerarRows(grupos[s]) })),
+                null, base
             );
         }
     },
@@ -893,13 +897,15 @@ const UIController = {
             linhas: linhasJSON,
         };
 
+        const dataRef     = this._parseDataRefParaNome(resultado.consulta.dataOperacao);
+        const empresaCods = this._empresasAbbr(paxF);
+        const nomeArq     = `SUMM_${dataRef}_${empresaCods}`;
+
         const json = JSON.stringify(resultado, null, 2);
         const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement("a");
-        const data = new Date().toISOString().split("T")[0].replace(/-/g, "_");
-        const sufixo = empresa ? empresa.replace(/\s+/g, "_") : "todas";
-        a.href = url; a.download = `resumo_horario_${sufixo}_${data}.json`; a.click();
+        a.href = url; a.download = `${nomeArq}.json`; a.click();
         URL.revokeObjectURL(url);
     },
 
@@ -1049,32 +1055,51 @@ const UIController = {
         this._downloadZIP(arquivos, "oferta_demanda_todas");
     },
 
-    _downloadCSV(linhas, prefixo) {
+    // Converte "DD/MM/AAAA[ HH:mm:ss]" → "AAAA_MM_DD"
+    _parseDataRefParaNome(dataOperacao) {
+        const parte = (dataOperacao || "").split(" ")[0];
+        const [d, m, a] = parte.split("/");
+        return (a && m && d) ? `${a}_${m.padStart(2, "0")}_${d.padStart(2, "0")}` : "s_data";
+    },
+
+    // Retorna os abbr distintos (APP_CONFIG.empresas) dos passageiros, ordenados e unidos por "_"
+    _empresasAbbr(paxList) {
+        const abbrMap = Object.fromEntries(
+            Object.values(APP_CONFIG.empresas).map(e => [e.nome, e.abbr])
+        );
+        return [...new Set(paxList.map(p => p.empresa).filter(Boolean))]
+            .sort()
+            .map(nome => abbrMap[nome] || nome)
+            .join("_") || "todas";
+    },
+
+    _downloadCSV(linhas, prefixo, nomeCompleto = null) {
         const escape = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
         const csv = linhas.map(row => row.map(escape).join(";")).join("\r\n");
         const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement("a");
         const data = new Date().toISOString().split("T")[0].replace(/-/g, "_");
-        a.href = url; a.download = `${prefixo}_${data}.csv`; a.click();
+        a.href = url; a.download = nomeCompleto ? `${nomeCompleto}.csv` : `${prefixo}_${data}.csv`; a.click();
         URL.revokeObjectURL(url);
     },
-    
-    // arquivos: [{ nome: "arquivo", linhas: [[...], ...] }, ...]
-    async _downloadZIP(arquivos, nomeZip) {
+
+    // arquivos: [{ nome|nomeCompleto: "arquivo", linhas: [[...], ...] }, ...]
+    async _downloadZIP(arquivos, nomeZip, nomeZipCompleto = null) {
         const escape = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
         const data   = new Date().toISOString().split("T")[0].replace(/-/g, "_");
         const zip    = new JSZip();
-        
+
         for (const arq of arquivos) {
-            const csv = arq.linhas.map(row => row.map(escape).join(";")).join("\r\n");
-            zip.file(`${arq.nome}_${data}.csv`, "\uFEFF" + csv);
+            const csv      = arq.linhas.map(row => row.map(escape).join(";")).join("\r\n");
+            const nomeFile = arq.nomeCompleto ? `${arq.nomeCompleto}.csv` : `${arq.nome}_${data}.csv`;
+            zip.file(nomeFile, "\uFEFF" + csv);
         }
-        
+
         const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement("a");
-        a.href = url; a.download = `${nomeZip}_${data}.zip`; a.click();
+        a.href = url; a.download = nomeZipCompleto ? `${nomeZipCompleto}.zip` : `${nomeZip}_${data}.zip`; a.click();
         URL.revokeObjectURL(url);
     },
 
