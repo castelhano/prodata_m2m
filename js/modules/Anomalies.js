@@ -414,7 +414,10 @@ const Anomalies = {
                 cards += this._htmlCardOmissao(s, i);
             });
         } else {
-            items.forEach((s, i) => { cards += this._htmlCardEditada(s, i); });
+            items.forEach((s, i) => {
+                this._pendentes[`e_${i}`] = s;
+                cards += this._htmlCardEditada(s, i);
+            });
         }
 
         return `
@@ -456,6 +459,11 @@ const Anomalies = {
                             <option value="">Todos</option>${mkOpts(carros)}
                         </select>
                     </div>
+                    <button onclick="Anomalies._exportCSVOmissoes()"
+                        class="btn btn-ghost"
+                        style="margin-left:auto; font-size:0.78rem; white-space:nowrap; height:30px; align-self:flex-end;">
+                        ↓ CSV
+                    </button>
                 </div>
             `;
         } else {
@@ -496,6 +504,11 @@ const Anomalies = {
                             <option value="">Todos</option>${optsMotivo}
                         </select>
                     </div>
+                    <button onclick="Anomalies._exportCSVEditadas()"
+                        class="btn btn-ghost"
+                        style="margin-left:auto; font-size:0.78rem; white-space:nowrap; height:30px; align-self:flex-end;">
+                        ↓ CSV
+                    </button>
                 </div>
             `;
         }
@@ -859,6 +872,89 @@ const Anomalies = {
 
     _ignorarCard(cardId) {
         document.getElementById(cardId)?.remove();
+    },
+
+
+    // ==========================================================
+    // EXPORTAÇÃO CSV
+    // ==========================================================
+
+    _exportCSVOmissoes() {
+        const visibles = [...document.querySelectorAll('[data-tipo="omissao"]')]
+            .filter(c => c.style.display !== 'none');
+
+        const rows = [['Empresa', 'Linha', 'Início Plan', 'Fim Plan', 'Veículo Inferido',
+                        'Nível', 'Score', 'Pax na Janela', 'Critérios']];
+
+        for (const card of visibles) {
+            const key = card.id.replace('anomalies-card-', '');
+            const s   = this._pendentes[key];
+            if (!s) continue;
+            rows.push([
+                s.omissao.empresa,
+                s.omissao.linha,
+                s.omissao.partidaPlanejada,
+                s.omissao.chegadaPlanejada,
+                s.veiculoInferido,
+                s.nivel,
+                s.score,
+                s.paxNaJanela.length,
+                s.criterios.map(c => `${c.label} (${c.pts >= 0 ? '+' : ''}${c.pts})`).join(' | ')
+            ]);
+        }
+
+        this._downloadCSV(rows, 'anomalias_omissoes');
+    },
+
+    _exportCSVEditadas() {
+        const visibles = [...document.querySelectorAll('[data-tipo="editada"]')]
+            .filter(c => c.style.display !== 'none');
+
+        const motivoLabels = { sem_passageiro: 'Sem passageiro', desvio_horario: 'Desvio de horário', ambos: 'Ambos' };
+        const rows = [['Empresa', 'Linha', 'Veículo', 'Partida Plan', 'Chegada Plan',
+                        'Partida Real', 'Chegada Real', 'Pax', 'Nível', 'Score', 'Motivo', 'Critérios']];
+
+        for (const card of visibles) {
+            const key = card.id.replace('anomalies-card-', '');
+            const s   = this._pendentes[key];
+            if (!s) continue;
+            const v = s.viagem;
+            rows.push([
+                v.empresa,
+                v.linha,
+                v.veiculo || '',
+                v.partidaPlanejada,
+                v.chegadaPlanejada,
+                v.partidaReal,
+                v.chegadaReal,
+                v.paxEfetivos.length,
+                s.nivel,
+                s.score,
+                motivoLabels[s.motivo] || s.motivo,
+                s.criterios.map(c => `${c.label} (+${c.pts})`).join(' | ')
+            ]);
+        }
+
+        this._downloadCSV(rows, 'anomalias_editadas');
+    },
+
+    _downloadCSV(rows, filename) {
+        const esc = v => {
+            const s = String(v ?? '');
+            return s.includes(',') || s.includes('"') || s.includes('\n')
+                ? `"${s.replace(/"/g, '""')}"`
+                : s;
+        };
+        const csv  = rows.map(r => r.map(esc).join(',')).join('\n');
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url  = URL.createObjectURL(blob);
+        const a    = Object.assign(document.createElement('a'), {
+            href: url, download: `${filename}_${new Date().toISOString().slice(0, 10)}.csv`
+        });
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     },
 
 
