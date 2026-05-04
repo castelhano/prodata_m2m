@@ -160,10 +160,10 @@ const APP_CONFIG = {
         // Pesos para cálculo de confiança das sugestões (soma define score 0–N)
         // Veículo pesa mais que linha: troca de carro é rara, linha errada é operacionalmente possível
         pesos: {
-            matchVeiculo:   40,   // Carro do passageiro bate com o carro da viagem candidata
-            matchLinha:     25,   // Linha canônica bate (após normalização)
+            matchVeiculo:   45,   // Carro do passageiro bate com o carro da viagem candidata
+            matchLinha:     20,   // Linha canônica bate (após normalização)
             matchSentido:   10,   // Sentido bate quando disponível
-            dentroGapCurto: 25,   // Passageiro dentro da janela estendida por gapCurtoMax
+            dentroGapCurto: 20,   // Passageiro dentro da janela estendida por gapCurtoMax
             dentroGapLongo: 15    // Passageiro dentro da janela estendida por gapLongoMax (menor confiança)
         },
 
