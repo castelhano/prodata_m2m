@@ -1186,28 +1186,12 @@ input[type="checkbox"]:checked::after {
 
         <div class="ops-grid">
 
-            <button class="op-card" onclick="Anomalies.checkOmissoes()">
+            <button class="op-card" onclick="Anomalies.openModal()">
                 <div class="op-icon c-red">
-                    <i data-lucide="alert-circle"></i>
+                    <i data-lucide="shield-alert"></i>
                 </div>
-                <div class="op-title">Omissões com PAX</div>
-                <div class="op-desc">Identifica omissões suspeitas com passageiros na janela</div>
-            </button>
-
-            <button class="op-card" onclick="Anomalies.checkEditadas()">
-                <div class="op-icon c-yellow">
-                    <i data-lucide="edit-3"></i>
-                </div>
-                <div class="op-title">Editadas sem PAX</div>
-                <div class="op-desc">Viagens editadas manualmente sem passageiros registrados</div>
-            </button>
-
-            <button class="op-card" onclick="Anomalies.gerenciarOmissoes()">
-                <div class="op-icon c-blue">
-                    <i data-lucide="list-checks"></i>
-                </div>
-                <div class="op-title">Gerenciar omissões</div>
-                <div class="op-desc">Visão geral de todas as omissões e status de tratamento</div>
+                <div class="op-title">Anomalias</div>
+                <div class="op-desc">Analisa omissões suspeitas e viagens editadas inconsistentes</div>
             </button>
 
             <button class="op-card" onclick="Storage.exportJSON()">

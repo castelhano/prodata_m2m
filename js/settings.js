@@ -180,28 +180,26 @@ const APP_CONFIG = {
         omissoesComPax: {
             ativo: true,
 
-            // Janela de busca em torno do horário planejado da omissão
-            janelaAuditoriaMin: 25,
+            // Extensão máxima da janela de busca além do intervalo planejado da omissão.
+            // Passageiros fora de [partidaPlanejada - max, chegadaPlanejada + max] são ignorados.
+            janelaAuditoriaMax: 25,
 
-            // Mínimo de passageiros órfãos na janela para considerar a omissão como candidata.
-            // Garante que casos sem nenhuma evidência de passageiro sejam descartados antes da pontuação.
+            // Mínimo de passageiros na janela para a omissão entrar na pontuação.
             minPassageirosSuspeitos: 2,
 
-            // Pontuação mínima para reportar a omissão como suspeita
+            // Pontuação mínima para reportar a omissão como suspeita.
             pontuacaoMinima: 20,
 
-            // Percentual mínimo dos passageiros órfãos do veículo (no dia inteiro)
-            // concentrados na janela da omissão para ativar o critério densidadeAlta.
-            // Calculado sobre TODOS os órfãos do veículo — não por viagem isolada.
-            // Ex: veículo com 125 órfãos no dia, 100 na janela = 80% → critério ativo
+            // Percentual mínimo dos órfãos do veículo (dia inteiro) presentes na janela
+            // da omissão para ativar o critério densidadeAlta.
+            // Ex: veículo com 25 órfãos no dia, 22 na janela = 88% → critério ativo
             densidadePercentualMinimo: 80,
 
             pesos: {
-                matchVeiculo:           40,   // Carro planejado da omissão bate com carro do passageiro
-                matchLinha:             20,   // Linha planejada bate com linha do passageiro
+                matchLinha:             20,   // Linha planejada da omissão bate com linha dos passageiros
                 gapEntreViagens:        50,   // Omissão está entre duas viagens produtivas da mesma tabela
                 densidadeAlta:          30,   // Concentração de órfãos acima de densidadePercentualMinimo
-                foraTolerancia:         15,   // Passageiros detectados na borda da janela de auditoria
+                foraTolerancia:         15,   // Passageiros na zona de tolerância (fora do intervalo planejado)
                 penalidadeLinhaIgnorada:-20   // Penalidade proporcional quando pax na janela são de linhas ignoradas
             },
 
@@ -211,10 +209,34 @@ const APP_CONFIG = {
             }
         },
 
-        editadasSemPax: {
-            ativo: true
-            // Lógica: viagemEditada === "Sim" + paxEfetivos.length === 0
-            // Sem parâmetros adicionais por enquanto
+        editadasSuspeitas: {
+            ativo: true,
+
+            // Pesos: cada critério que dispara soma ao índice de suspeita
+            // semPassageiro: critério binário (editada + 0 pax após conciliação)
+            // deltaInicio/Fim/Ciclo: disparam se o desvio absoluto superar a tolerância
+            pesos: {
+                semPassageiro:  50,
+                deltaInicio:    20,
+                deltaFim:       15,
+                deltaCiclo:     25
+            },
+
+            // Tolerâncias: desvio abaixo do corte = variação normal, acima = suspeito
+            // Medido em minutos, valor absoluto (adiantado ou atrasado, mesmo peso)
+            tolerancias: {
+                deltaInicioMin: 10,
+                deltaFimMin:    10,
+                deltaCicloMin:  15
+            },
+
+            // Índice mínimo para reportar a viagem
+            indiceMinimo: 20,
+
+            thresholds: {
+                alto:  60,
+                medio: 30
+            }
         }
 
         // Novos módulos entram aqui:
